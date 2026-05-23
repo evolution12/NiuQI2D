@@ -316,3 +316,20 @@ class SelectRecordRequest(BaseModel):
 
 class SelectRecordResponse(BaseModel):
     asset: AssetResponse
+
+
+class AssetListResponse(BaseModel):
+    items: list[AssetResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class TagsResponse(BaseModel):
+    tags: list[str]
+
+
+class AnimationResponse(BaseModel):
+    frames: list[str]
+    frame_count: int
+    frame_delay_ms: int = 100
