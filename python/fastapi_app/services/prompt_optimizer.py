@@ -145,11 +145,19 @@ class PromptOptimizer:
 
         raise InvalidParamError("当前生成引擎仅支持 character 和 tile 素材")
 
+    # OpenAI 兼容接口的 base URL 映射
+    _BASE_URLS: dict[str, str] = {
+        "openai": "https://api.openai.com/v1",
+        "deepseek": "https://api.deepseek.com",
+    }
+
     async def _optimize_with_provider(self, template_prompt: str) -> str:
-        if self.api_provider != "openai":
-            raise InvalidParamError(f"暂不支持文本生成提供商 {self.api_provider}")
         if not self.api_key:
             raise ApiKeyInvalidError("未配置文本生成 API Key")
+
+        base_url = self._BASE_URLS.get(self.api_provider)
+        if not base_url:
+            raise InvalidParamError(f"暂不支持文本生成提供商 {self.api_provider}")
 
         payload: dict[str, Any] = {
             "model": self.api_model,
@@ -167,7 +175,7 @@ class PromptOptimizer:
         try:
             async with httpx.AsyncClient(timeout=PROMPT_OPTIMIZER_TIMEOUT_SECONDS) as client:
                 response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
+                    f"{base_url}/chat/completions",
                     headers=headers,
                     json=payload,
                 )
@@ -186,9 +194,10 @@ class PromptOptimizer:
 
         data = response.json()
         try:
-            content = data["choices"][0]["message"]["content"]
+            message = data["choices"][0]["message"]
         except (KeyError, IndexError, TypeError) as exc:
             raise ApiCallFailedError("Prompt 优化 API 响应格式无效") from exc
+        content = message.get("content") or message.get("reasoning_content") or ""
         if not isinstance(content, str) or not content.strip():
             raise ApiCallFailedError("Prompt 优化 API 返回空结果")
         await asyncio.sleep(0)

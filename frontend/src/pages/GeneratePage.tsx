@@ -39,15 +39,15 @@ export function GeneratePage() {
   }, []);
 
   const handleGenerate = useCallback(async (preview: boolean) => {
-    if (!currentProject) { toast.warning('Select a project first'); return; }
-    if (!prompt.trim()) { toast.warning('Enter a description'); return; }
+    if (!currentProject) { toast.warning('请先选择一个项目'); return; }
+    if (!prompt.trim()) { toast.warning('请输入描述'); return; }
     setGenerating(true); setSelectedId(null);
     try {
       const fn = preview ? generationApi.generatePreview : generationApi.generate;
       const r = await fn({ project_id: currentProject.id, user_prompt: prompt, ...params, preview_mode: preview });
       setRecords(r.records); setOptimizedPrompt(r.optimized_prompt);
-      toast.success(`${r.records.length} candidates generated`);
-    } catch (e: any) { toast.error('Generation failed: ' + (e.message ?? 'unknown')); }
+      toast.success(`已生成 ${r.records.length} 个候选`);
+    } catch (e: any) { toast.error('生成失败: ' + (e.message ?? '未知错误')); }
     finally { setGenerating(false); }
   }, [currentProject, prompt, params]);
 
@@ -56,8 +56,8 @@ export function GeneratePage() {
     try {
       const tags = addDialog.tags.split(',').map((t) => t.trim()).filter(Boolean);
       await generationApi.selectRecord(addDialog.recordId, { name: addDialog.name, tags });
-      toast.success('Added to library'); setAddDialog(null);
-    } catch (e: any) { toast.error('Failed: ' + (e.message ?? 'unknown')); }
+      toast.success('已加入素材库'); setAddDialog(null);
+    } catch (e: any) { toast.error('操作失败: ' + (e.message ?? '未知错误')); }
   };
 
   const handleVariant = useCallback(async (id: string) => {
@@ -65,15 +65,15 @@ export function GeneratePage() {
     setGenerating(true);
     try {
       const r = await generationApi.variant(id, { project_id: currentProject.id, ...params });
-      setRecords(r.records); setOptimizedPrompt(r.optimized_prompt); toast.success('Variant generated');
-    } catch (e: any) { toast.error('Variant failed: ' + (e.message ?? 'unknown')); }
+      setRecords(r.records); setOptimizedPrompt(r.optimized_prompt); toast.success('变体已生成');
+    } catch (e: any) { toast.error('变体生成失败: ' + (e.message ?? '未知错误')); }
     finally { setGenerating(false); }
   }, [currentProject, params]);
 
   if (!currentProject) {
     return (
       <div className="page">
-        <EmptyState title="Select a project to start" description="Create or pick a project from the sidebar" action={{ label: 'Settings', onClick: () => navigate('/settings') }} />
+        <EmptyState title="选择一个项目开始" description="从侧边栏创建或选择一个项目" action={{ label: '设置', onClick: () => navigate('/settings') }} />
       </div>
     );
   }
@@ -81,7 +81,7 @@ export function GeneratePage() {
   return (
     <div className="page">
       <div className="page-header">
-        <h2 className="page-title">Generate</h2>
+        <h2 className="page-title">生成</h2>
         <span className="page-subtitle">{currentProject.name}</span>
       </div>
 
@@ -93,10 +93,10 @@ export function GeneratePage() {
 
           <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
             <button className="nq-btn nq-btn--accent nq-btn--lg" style={{ flex: 1 }} disabled={generating || !prompt.trim()} onClick={() => handleGenerate(true)}>
-              {generating ? 'Generating...' : 'Quick Preview'}
+              {generating ? '生成中...' : '快速预览'}
             </button>
             <button className="nq-btn nq-btn--lg" style={{ flex: 1 }} disabled={generating || !prompt.trim()} onClick={() => handleGenerate(false)}>
-              {generating ? 'Generating...' : 'High Quality'}
+              {generating ? '生成中...' : '高质量'}
             </button>
           </div>
 
@@ -105,7 +105,7 @@ export function GeneratePage() {
 
         {/* Right column: params */}
         <div className="nq-section" style={{ alignSelf: 'flex-start' }}>
-          <div className="nq-section-title">Parameters</div>
+          <div className="nq-section-title">参数</div>
           <ParamPanel assetType={assetType} assetSubtype={assetSubtype} params={params} onChange={setParams} />
           <div style={{ borderTop: '1px solid var(--border-1)', marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-3)' }}>
             <ReferenceUpload
@@ -131,20 +131,20 @@ export function GeneratePage() {
       {addDialog && (
         <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setAddDialog(null); }}>
           <div className="modal-panel">
-            <div className="modal-header"><span className="modal-title">Add to Library</span></div>
+            <div className="modal-header"><span className="modal-title">加入素材库</span></div>
             <div className="modal-body">
               <div className="form-row">
-                <label className="form-label">Asset name</label>
-                <input className="nq-input" value={addDialog.name} onChange={(e) => setAddDialog((p) => p ? { ...p, name: e.target.value } : null)} placeholder="Name this asset" autoFocus style={{ width: '100%' }} />
+                <label className="form-label">素材名称</label>
+                <input className="nq-input" value={addDialog.name} onChange={(e) => setAddDialog((p) => p ? { ...p, name: e.target.value } : null)} placeholder="为素材命名" autoFocus style={{ width: '100%' }} />
               </div>
               <div className="form-row">
-                <label className="form-label">Tags (comma-separated)</label>
-                <input className="nq-input" value={addDialog.tags} onChange={(e) => setAddDialog((p) => p ? { ...p, tags: e.target.value } : null)} placeholder="archer, character, forest" style={{ width: '100%' }} />
+                <label className="form-label">标签（逗号分隔）</label>
+                <input className="nq-input" value={addDialog.tags} onChange={(e) => setAddDialog((p) => p ? { ...p, tags: e.target.value } : null)} placeholder="弓箭手, 角色, 森林" style={{ width: '100%' }} />
               </div>
             </div>
             <div className="modal-footer">
-              <button className="nq-btn nq-btn--sm" onClick={() => setAddDialog(null)}>Cancel</button>
-              <button className="nq-btn nq-btn--sm nq-btn--accent" onClick={handleAddToLibrary} disabled={!addDialog.name.trim()}>Add</button>
+              <button className="nq-btn nq-btn--sm" onClick={() => setAddDialog(null)}>取消</button>
+              <button className="nq-btn nq-btn--sm nq-btn--accent" onClick={handleAddToLibrary} disabled={!addDialog.name.trim()}>添加</button>
             </div>
           </div>
         </div>

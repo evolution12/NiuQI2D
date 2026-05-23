@@ -1,4 +1,4 @@
-export function LoadingOverlay({ message = 'Loading...' }: { message?: string }) {
+export function LoadingOverlay({ message = '加载中...' }: { message?: string }) {
   return (
     <div
       style={{

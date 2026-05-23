@@ -7,10 +7,10 @@ export function PromptInput({ value, onChange, onSubmit, disabled }: { value: st
   };
   return (
     <div>
-      <div className="form-label" style={{ marginBottom: 'var(--sp-1)' }}>Description</div>
+      <div className="form-label" style={{ marginBottom: 'var(--sp-1)' }}>描述</div>
       <textarea ref={ref} className="nq-input" value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={handleKey}
-        disabled={disabled} placeholder="Describe the asset you want to generate..." rows={3} style={{ width: '100%', minHeight: 72 }} />
-      <div style={{ font: '400 10px var(--font)', color: 'var(--text-3)', marginTop: 'var(--sp-1)' }}>Enter to submit, Shift+Enter for newline</div>
+        disabled={disabled} placeholder="描述你想要生成的素材..." rows={3} style={{ width: '100%', minHeight: 72 }} />
+      <div style={{ font: '400 10px var(--font)', color: 'var(--text-3)', marginTop: 'var(--sp-1)' }}>回车提交，Shift+回车换行</div>
     </div>
   );
 }

@@ -68,9 +68,9 @@ export function Sidebar() {
       await loadProjects();
       switchProject(project.id);
       setShowCreateProject(false);
-      toast.success('Project created');
+      toast.success('项目已创建');
     } catch (e: any) {
-      toast.error('Failed: ' + (e.message ?? 'unknown'));
+      toast.error('操作失败: ' + (e.message ?? '未知错误'));
     }
   };
 
@@ -85,7 +85,7 @@ export function Sidebar() {
         {/* Projects */}
         <div className="sidebar-section">
           <div className="sidebar-section-header">
-            <span>Projects</span>
+            <span>项目</span>
             <button className="nq-btn nq-btn--sm" onClick={() => setShowCreateProject(true)}>
               {icons.plus}
             </button>
@@ -95,20 +95,20 @@ export function Sidebar() {
 
         {/* Nav */}
         <nav className="sidebar-nav">
-          <Nav route="/" label="Generate" icon={icons.generate} />
+          <Nav route="/" label="生成" icon={icons.generate} />
           <Nav
             route="/assets"
-            label="Assets"
+            label="素材库"
             icon={icons.assets}
             badge={runningTasks.length || undefined}
           />
-          <Nav route="/export" label="Export" icon={icons.export} />
-          <NavButton label="Styles" icon={icons.style} onClick={() => setShowStyleLibrary(true)} />
+          <Nav route="/export" label="导出" icon={icons.export} />
+          <NavButton label="风格" icon={icons.style} onClick={() => setShowStyleLibrary(true)} />
         </nav>
 
         {/* Footer */}
         <div className="sidebar-footer">
-          <Nav route="/settings" label="Settings" icon={icons.settings} />
+          <Nav route="/settings" label="设置" icon={icons.settings} />
         </div>
       </aside>
 

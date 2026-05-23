@@ -54,16 +54,16 @@ export function AssetLibraryPage() {
   };
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    try { if (deleteTarget.type === 'batch') await assetApi.batchDelete(deleteTarget.ids); else await assetApi.delete(deleteTarget.ids[0]); toast.success('Deleted'); setSelectedIds((p) => { const n = new Set(p); deleteTarget.ids.forEach((id) => n.delete(id)); return n; }); setDeleteTarget(null); setDetailId(null); loadAssets(); }
-    catch (e: any) { toast.error('Failed: ' + (e.message ?? 'unknown')); }
+    try { if (deleteTarget.type === 'batch') await assetApi.batchDelete(deleteTarget.ids); else await assetApi.delete(deleteTarget.ids[0]); toast.success('已删除'); setSelectedIds((p) => { const n = new Set(p); deleteTarget.ids.forEach((id) => n.delete(id)); return n; }); setDeleteTarget(null); setDetailId(null); loadAssets(); }
+    catch (e: any) { toast.error('操作失败: ' + (e.message ?? '未知错误')); }
   };
 
-  if (!currentProject) return <div className="page"><EmptyState title="Select a project" description="Pick a project from the sidebar to view assets" /></div>;
+  if (!currentProject) return <div className="page"><EmptyState title="选择一个项目" description="从侧边栏选择一个项目查看素材" /></div>;
 
   return (
     <div className="page">
       <div className="page-header">
-        <h2 className="page-title">Assets</h2>
+        <h2 className="page-title">素材库</h2>
         <span className="page-subtitle">{currentProject.name} &middot; {total}</span>
       </div>
 
@@ -78,27 +78,27 @@ export function AssetLibraryPage() {
         onClearSelection={() => setSelectedIds(new Set())} />
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {loading ? <div style={{ padding: 'var(--sp-8)', textAlign: 'center', color: 'var(--text-3)', font: '400 12px var(--font)' }}>Loading...</div>
+        {loading ? <div style={{ padding: 'var(--sp-8)', textAlign: 'center', color: 'var(--text-3)', font: '400 12px var(--font)' }}>加载中...</div>
           : <AssetGrid assets={assets} selectedIds={selectedIds} onToggleSelect={(id) => setSelectedIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; })} onDetail={handleDetail} />}
       </div>
 
       {total > 20 && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--sp-2)', padding: 'var(--sp-3) 0' }}>
-          <button className="nq-btn nq-btn--sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+          <button className="nq-btn nq-btn--sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>上一页</button>
           <span style={{ font: '400 11px var(--mono)', color: 'var(--text-3)', display: 'flex', alignItems: 'center' }}>{page}/{Math.ceil(total/20)}</span>
-          <button className="nq-btn nq-btn--sm" disabled={page >= Math.ceil(total/20)} onClick={() => setPage((p) => p + 1)}>Next</button>
+          <button className="nq-btn nq-btn--sm" disabled={page >= Math.ceil(total/20)} onClick={() => setPage((p) => p + 1)}>下一页</button>
         </div>
       )}
 
       {detailId && assets.find((a) => a.id === detailId) && (
         <AssetDetailPanel asset={assets.find((a) => a.id === detailId)!} records={detailRecords} animation={detailAnim}
           onClose={() => setDetailId(null)}
-          onReproduce={async (id) => { try { await generationApi.reproduce(id); toast.success('Reproducing...'); } catch (e: any) { toast.error(e.message); } }}
-          onVariant={async (id) => { try { await generationApi.variant(id, {}); toast.success('Generating variant...'); } catch (e: any) { toast.error(e.message); } }}
+          onReproduce={async (id) => { try { await generationApi.reproduce(id); toast.success('重新生成中...'); } catch (e: any) { toast.error(e.message); } }}
+          onVariant={async (id) => { try { await generationApi.variant(id, {}); toast.success('生成变体中...'); } catch (e: any) { toast.error(e.message); } }}
           onDelete={(id) => setDeleteTarget({ type: 'single', ids: [id] })} />
       )}
 
-      <ConfirmDialog open={!!deleteTarget} title={deleteTarget?.type === 'batch' ? `Delete ${deleteTarget?.ids.length} assets?` : 'Delete this asset?'} message="This cannot be undone." danger confirmLabel="Delete" onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
+      <ConfirmDialog open={!!deleteTarget} title={deleteTarget?.type === 'batch' ? `确定删除 ${deleteTarget?.ids.length} 个素材？` : '确定删除该素材？'} message="此操作不可撤销。" danger confirmLabel="删除" onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
     </div>
   );
 }

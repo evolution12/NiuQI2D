@@ -6,7 +6,7 @@ export function PromptPreview({ prompt }: { prompt: string }) {
   return (
     <div className="nq-section" style={{ padding: 0, overflow: 'hidden' }}>
       <button onClick={() => setOpen(!open)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--sp-2) var(--sp-3)', background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', font: '500 11px var(--font)' }}>
-        <span>Optimized prompt</span>
+        <span>优化后的提示词</span>
         <span>{open ? '\u25B2' : '\u25BC'}</span>
       </button>
       {open && (

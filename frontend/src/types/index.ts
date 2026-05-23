@@ -181,6 +181,10 @@ export interface SettingsResponse {
   text_api_model: string;
   preview_image_model: string;
   quality_image_model: string;
+  volcengine_access_key_set: boolean;
+  volcengine_req_key: string;
+  doubao_api_key_set: boolean;
+  doubao_model: string;
   default_style_id: string | null;
   default_export_path: string;
 }
@@ -195,6 +199,11 @@ export interface UpdateSettingsRequest {
   text_api_model?: string;
   preview_image_model?: string;
   quality_image_model?: string;
+  volcengine_access_key?: string;
+  volcengine_secret_key?: string;
+  volcengine_req_key?: string;
+  doubao_api_key?: string;
+  doubao_model?: string;
   default_style_id?: string | null;
   default_export_path?: string;
 }
