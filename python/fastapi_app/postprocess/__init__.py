@@ -7,6 +7,7 @@ from .quantize import QuantizeStep
 from .remove_bg import RemoveBackgroundStep
 from .resize import ResizeStep
 from .spritesheet import FrameMetadata, SpriteSheetConfig, SpriteSheetResult, build_sprite_sheet
+from .tileset import TileMetadata, TilesetConfig, TilesetResult, build_tileset
 
 __all__ = [
     "CropCenterStep",
@@ -20,5 +21,9 @@ __all__ = [
     "ResizeStep",
     "SpriteSheetConfig",
     "SpriteSheetResult",
+    "TileMetadata",
+    "TilesetConfig",
+    "TilesetResult",
     "build_sprite_sheet",
+    "build_tileset",
 ]
