@@ -292,4 +292,5 @@ async def select_generation_record(
     # Link generation record to asset
     await generation_crud.update(session, record_id, {"asset_id": asset.id})
 
-    return SelectRecordResponse(asset=AssetResponse.model_validate(asset))
+    from .assets import _asset_to_response
+    return SelectRecordResponse(asset=_asset_to_response(asset))

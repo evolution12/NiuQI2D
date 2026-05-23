@@ -174,7 +174,7 @@ export const assetApi = {
   delete: (id: string) => api.delete(`/assets/${id}`),
   batchDelete: (ids: string[]) => api.post('/assets/batch-delete', { ids }),
   getAnimation: (id: string) => api.get<AnimationResponse>(`/assets/${id}/animation`),
-  getTags: (projectId: string) => api.get<TagsResponse>(`/tags?project_id=${projectId}`),
+  getTags: (projectId: string) => api.get<TagsResponse>(`/assets/tags?project_id=${projectId}`),
 };
 
 // --- Projects ---
