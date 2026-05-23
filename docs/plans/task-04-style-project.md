@@ -1,14 +1,14 @@
 # M4：风格管理与项目管理
 
-> 里程碑目标：用户能创建/管理风格档案，上传参考图驱动风格，创建项目绑定风格，复现和变体生成。
+> 里程碑目标：用户能创建/管理风格档案，上传参考图并自动提取风格特征，创建项目绑定风格，复现和变体生成。
 
 ---
 
-## M4-01 | BE | 风格管理 API
+## M4-01 | BE | 风格管理 API + 参考图视觉描述提取
 
 ### 职责
 
-实现风格档案的 CRUD API，包含预设风格初始化、自定义风格创建、参考图上传。
+实现风格档案的 CRUD API，包含预设风格初始化、自定义风格创建、参考图上传。核心新增：调用视觉 LLM 对参考图进行风格描述提取，生成的描述文本供 Prompt Optimizer 使用。
 
 ### 涉及文件
 
@@ -17,14 +17,15 @@ python/fastapi_app/
 ├── routers/
 │   └── styles.py                # 风格管理 API（替换 M1 中的空路由）
 ├── services/
-│   └── style_service.py         # 风格业务逻辑
+│   ├── style_service.py         # 风格业务逻辑
+│   └── reference_analyzer.py    # 参考图视觉描述提取（调用 vision LLM）
 ├── data/
 │   └── preset_styles.json       # 内置预设风格定义
 ```
 
 ### 依赖
 
-M1-03（数据库 CRUD）
+M1-03（数据库 CRUD）、M1-05（文件上传 API）
 
 ### 验收标准
 
@@ -33,23 +34,47 @@ M1-03（数据库 CRUD）
 - [ ] `POST /api/v1/styles` 创建自定义风格
 - [ ] `PUT /api/v1/styles/{id}` 更新风格参数
 - [ ] `DELETE /api/v1/styles/{id}` 删除自定义风格（预设风格不可删除）
-- [ ] `POST /api/v1/styles/{id}/reference` 上传参考图
+- [ ] `POST /api/v1/styles/{id}/reference` 上传参考图并自动提取风格描述
 - [ ] `DELETE /api/v1/styles/{id}/reference` 删除参考图
-- [ ] 首次启动时自动初始化预设风格到数据库（如不存在）
+- [ ] 首次启动时自动初始化预设风格到数据库
+- [ ] 参考图上传后自动调用视觉 LLM 提取风格描述，结果存入 StyleProfile 的 extra_params 中
 
 ### 接口约定
 
-**`POST /api/v1/styles`**
+**`POST /api/v1/styles/{id}/reference`**
 
 ```python
-class CreateStyleRequest(BaseModel):
-    name: str
-    art_style: ArtStyle
-    color_palette: list[str] | None = None       # ["#2d1b00", "#4a8c3f"]
-    reference_image: UploadFile | None = None     # 参考图文件
-    default_size: dict = {"w": 16, "h": 16}
-    perspective: Perspective = Perspective.TOP_DOWN
-    extra_params: dict | None = None
+class ReferenceUploadResponse(BaseModel):
+    reference_image_path: str
+    style_description: str       # 视觉 LLM 提取的风格描述
+    # 示例："pixel art style, 16x16, top-down perspective, limited color palette
+    #        with earthy tones, bold outlines, no anti-aliasing, flat shading"
+```
+
+**`reference_analyzer.py` 核心接口：**
+
+```python
+class ReferenceAnalyzer:
+    def __init__(self, api_provider: str, api_key: str, api_model: str):
+        """
+        使用支持 vision 的模型（如 gpt-4o）分析参考图。
+        图片和文字 API 可以共用同一个 Key（如果供应商相同）。
+        """
+
+    async def analyze_style(self, image_path: str) -> str:
+        """
+        调用视觉 LLM 分析参考图的风格特征。
+        返回结构化的风格描述文本，供 Prompt Optimizer 使用。
+
+        Vision Prompt 示例：
+        "分析这张游戏素材图片的视觉风格，包括：
+         1. 画风格式（像素风/手绘/卡通/写实）
+         2. 调色板特征（主要颜色、明暗对比）
+         3. 线条风格（粗细、是否抗锯齿）
+         4. 阴影和光照方式
+         5. 整体尺寸和细节密度
+         用简洁的关键词描述，输出英文。"
+        """
 ```
 
 **预设风格（`data/preset_styles.json`）：**
@@ -126,12 +151,10 @@ M1-03（数据库 CRUD）
 
 ### 接口约定
 
-**`POST /api/v1/projects`**
-
 ```python
 class CreateProjectRequest(BaseModel):
     name: str
-    style_id: str | None = None   # 不传则使用全局默认风格
+    style_id: str | None = None
 
 class ProjectDetailResponse(BaseModel):
     id: str
@@ -149,7 +172,7 @@ class ProjectDetailResponse(BaseModel):
 
 ### 职责
 
-实现基于历史生成记录的复现（相同参数重新生成）和变体（微调参数再生成）功能。
+实现基于历史生成记录的复现（相同参数重新生成）和变体（微调参数再生成）功能。变体支持修改描述、风格、尺寸、视角、参考图。
 
 ### 涉及文件
 
@@ -165,18 +188,24 @@ M2-04（生成 API）、M1-03（数据库）
 
 ### 验收标准
 
-- [ ] `POST /api/v1/generation/{id}/reproduce` 复现：读取原始 GenerationRecord 的所有参数，重新走一遍完整流程（Prompt 优化 → 生成 → 后处理）
-- [ ] `POST /api/v1/generation/{id}/variant` 变体：继承原始参数，允许用户修改描述文本后重新生成
+- [ ] `POST /api/v1/generation/{id}/reproduce` 复现：读取原始 GenerationRecord 的所有参数，重新走一遍完整流程
+- [ ] `POST /api/v1/generation/{id}/variant` 变体：继承原始参数，允许用户修改以下字段后重新生成
 - [ ] 两次复现结果可能不完全相同（取决于 API 是否支持固定 seed），但风格应一致
 
 ### 接口约定
 
 ```python
 class VariantRequest(BaseModel):
-    prompt_override: str | None = None   # 可选的描述覆盖
-    seed_override: str | None = None     # 可选的种子覆盖
+    prompt_override: str | None = None           # 覆盖描述文本
+    style_id_override: str | None = None         # 切换风格
+    target_size_override: tuple[int, int] | None = None  # 修改尺寸
+    perspective_override: str | None = None      # 修改视角
+    reference_image_path: str | None = None      # 替换参考图
+    reference_style_description: str | None = None  # 替换参考图风格描述
+    seed_override: str | None = None
 
 # 两个接口返回类型与 POST /api/v1/generate 相同
+# 未覆盖的字段从原始 GenerationRecord 继承
 ```
 
 ---
@@ -185,7 +214,7 @@ class VariantRequest(BaseModel):
 
 ### 职责
 
-实现风格管理界面，包含风格列表、创建/编辑、参考图上传。
+实现风格管理界面，包含风格列表、创建/编辑、参考图上传（含风格提取反馈）。
 
 ### 涉及文件
 
@@ -201,14 +230,14 @@ src/
 
 ### 依赖
 
-M1-05（React 项目）、M4-01（风格管理 API）
+M1-06（React 项目）、M4-01（风格管理 API）
 
 ### 验收标准
 
 - [ ] 风格库以模态或侧滑面板展示
 - [ ] 预设风格和自定义风格分区展示，预设风格不可删除/编辑（但可复制为自定义后修改）
 - [ ] 创建自定义风格表单：名称、画风（下拉）、尺寸、视角、色板（可选）、参考图上传
-- [ ] 参考图上传支持拖拽 + 预览
+- [ ] 参考图上传后显示预览 + 自动提取的风格描述文本（只读展示，用户可了解系统如何理解该风格）
 - [ ] 编辑已有自定义风格
 - [ ] 删除自定义风格（确认弹窗）
 
@@ -216,9 +245,17 @@ M1-05（React 项目）、M4-01（风格管理 API）
 
 ```typescript
 interface StyleEditorProps {
-  style?: StyleProfile;           // 不传则为创建模式
+  style?: StyleProfile;
   onSave: (style: CreateStyleRequest) => void;
   onCancel: () => void;
+}
+
+interface StyleCardProps {
+  style: StyleProfile;
+  isPreset: boolean;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onDuplicate: (id: string) => void;
 }
 ```
 
@@ -244,7 +281,7 @@ src/
 
 ### 依赖
 
-M1-05（React 项目）、M4-02（项目管理 API）、M4-04（风格库 UI）
+M1-06（React 项目）、M4-02（项目管理 API）、M4-04（风格库 UI）
 
 ### 验收标准
 
