@@ -117,6 +117,14 @@ export class ApiError extends Error {
 
 export const api = new ApiClient();
 
+/** 将 /images/... 等后端静态路径补全为完整 URL */
+export function backendUrl(path: string): string {
+  if (!path || path.startsWith('http')) return path;
+  // 从 api.baseUrl 提取 origin（去掉 /api/v1 部分）
+  const base = api.baseUrl.replace(/\/api\/v1\/?$/, '');
+  return `${base}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 // ============================================================
 // API 方法：各模块封装
 // ============================================================
@@ -204,6 +212,6 @@ export const exportApi = {
 export const settingsApi = {
   get: () => api.get<SettingsResponse>('/settings'),
   update: (req: UpdateSettingsRequest) => api.put<SettingsResponse>('/settings', req),
-  testImageApi: () => api.post<ApiTestResponse>('/settings/test-image-api'),
-  testTextApi: () => api.post<ApiTestResponse>('/settings/test-text-api'),
+  testImageApi: (body: Record<string, string>) => api.post<ApiTestResponse>('/settings/test-image-api', body),
+  testTextApi: (body: Record<string, string>) => api.post<ApiTestResponse>('/settings/test-text-api', body),
 };

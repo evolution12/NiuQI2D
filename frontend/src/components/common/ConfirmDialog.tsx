@@ -11,7 +11,7 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger, onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, title, message, confirmLabel = '确认', cancelLabel = '取消', danger, onConfirm, onCancel }: ConfirmDialogProps) {
   const handleKey = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); }, [onCancel]);
   useEffect(() => {
     if (open) { document.addEventListener('keydown', handleKey); return () => document.removeEventListener('keydown', handleKey); }

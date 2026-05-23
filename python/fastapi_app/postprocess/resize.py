@@ -42,4 +42,35 @@ class ResizeStep(PostProcessStep):
         target_size: tuple[int, int],
         resample: Image.Resampling,
     ) -> list[Image.Image]:
-        return [ensure_rgba(image).resize(target_size, resample=resample) for image in images]
+        return [self._resize_one(image, target_size, resample) for image in images]
+
+    def _resize_one(
+        self,
+        image: Image.Image,
+        target_size: tuple[int, int],
+        resample: Image.Resampling,
+    ) -> Image.Image:
+        rgba = ensure_rgba(image)
+        tw, th = target_size
+        iw, ih = rgba.size
+
+        # 已经是目标尺寸，直接返回
+        if iw == tw and ih == th:
+            return rgba
+
+        # 等比缩放：取较大的缩放比，保证图片完全包含在 target_size 内
+        scale = min(tw / iw, th / ih)
+        new_w = max(1, round(iw * scale))
+        new_h = max(1, round(ih * scale))
+
+        resized = rgba.resize((new_w, new_h), resample=resample)
+
+        # 如果缩放后尺寸与 target_size 不完全一致，居中放到透明画布上
+        if new_w != tw or new_h != th:
+            canvas = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
+            x = (tw - new_w) // 2
+            y = (th - new_h) // 2
+            canvas.paste(resized, (x, y), resized)
+            return canvas
+
+        return resized

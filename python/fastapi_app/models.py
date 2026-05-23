@@ -120,13 +120,16 @@ class GenerationRecord(Base):
     __tablename__ = "generation_records"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
     asset_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("assets.id", ondelete="SET NULL"), nullable=True
     )
     user_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     optimized_prompt: Mapped[str] = mapped_column(Text, nullable=False)
-    style_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("style_profiles.id", ondelete="RESTRICT"), nullable=False
+    style_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("style_profiles.id", ondelete="RESTRICT"), nullable=True
     )
     asset_type: Mapped[AssetType] = mapped_column(SAEnum(AssetType), nullable=False)
     asset_subtype: Mapped[AssetSubtype | None] = mapped_column(SAEnum(AssetSubtype), nullable=True)

@@ -30,44 +30,44 @@ export function ExportPage() {
   useEffect(() => { if (currentProject) exportApi.getHistory(currentProject.id).then(setHistory).catch(() => {}); }, [currentProject]);
 
   const handleExport = async () => {
-    if (!assets.length) { toast.warning('Select assets first'); return; }
-    if (!exportPath.trim()) { toast.warning('Set export path'); return; }
+    if (!assets.length) { toast.warning('请先选择素材'); return; }
+    if (!exportPath.trim()) { toast.warning('请设置导出路径'); return; }
     if (!currentProject) return;
     setExporting(true);
     try {
       await exportApi.create({ asset_ids: assets.map((a) => a.id), export_format: format, export_path: exportPath, sheet_layout: config.layout as string, sheet_padding: config.padding as number, sheet_margin: config.margin as number, tileset_columns: config.columns as number, tileset_spacing: config.spacing as number, tileset_margin: config.margin as number });
-      toast.success('Exported');
+      toast.success('导出成功');
       setHistory(await exportApi.getHistory(currentProject.id));
-    } catch (e: any) { toast.error('Export failed: ' + (e.message ?? 'unknown')); }
+    } catch (e: any) { toast.error('导出失败: ' + (e.message ?? '未知错误')); }
     finally { setExporting(false); }
   };
 
-  if (!currentProject) return <div className="page"><EmptyState title="Select a project" description="Pick a project from the sidebar" /></div>;
+  if (!currentProject) return <div className="page"><EmptyState title="选择一个项目" description="从侧边栏选择一个项目" /></div>;
 
   return (
     <div className="page">
-      <div className="page-header"><h2 className="page-title">Export</h2></div>
+      <div className="page-header"><h2 className="page-title">导出</h2></div>
 
       <div className="nq-section">
-        <div className="nq-section-title">Selected assets ({assets.length})</div>
+        <div className="nq-section-title">已选素材 ({assets.length})</div>
         <AssetSelector assets={assets} onRemove={(id) => setAssets((p) => p.filter((a) => a.id !== id))} />
-        {!assets.length && <div style={{ textAlign: 'center', marginTop: 'var(--sp-2)' }}><button className="nq-btn nq-btn--sm" onClick={() => navigate('/assets')}>Browse assets</button></div>}
+        {!assets.length && <div style={{ textAlign: 'center', marginTop: 'var(--sp-2)' }}><button className="nq-btn nq-btn--sm" onClick={() => navigate('/assets')}>浏览素材</button></div>}
       </div>
 
       <div className="nq-section">
-        <div className="nq-section-title">Export type</div>
+        <div className="nq-section-title">导出类型</div>
         <ExportTypeSelector value={format} onChange={setFormat} />
       </div>
 
       <div className="nq-section">
-        <div className="nq-section-title">Configuration</div>
+        <div className="nq-section-title">配置</div>
         <ExportConfigForm format={format} config={config} onChange={setConfig} />
       </div>
 
       <PathSelector value={exportPath} onChange={setExportPath} />
 
       <button className="nq-btn nq-btn--accent nq-btn--lg" disabled={exporting || !assets.length || !exportPath.trim()} onClick={handleExport}>
-        {exporting ? 'Exporting...' : 'Export'}
+        {exporting ? '导出中...' : '导出'}
       </button>
 
       <ExportHistory records={history} onOpenFolder={(p) => toast.info(`Path: ${p}`)} />

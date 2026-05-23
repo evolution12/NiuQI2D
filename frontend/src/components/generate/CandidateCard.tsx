@@ -11,8 +11,8 @@ export function CandidateCard({ record, selected, onSelect, onAddToLibrary, onVa
         </div>
         <div className="truncate" style={{ font: '400 11px var(--font)', color: 'var(--text-2)' }}>{record.user_prompt}</div>
         <div style={{ display: 'flex', gap: 'var(--sp-1)', marginTop: 'var(--sp-2)' }}>
-          <button className="nq-btn nq-btn--sm nq-btn--accent" onClick={(e) => { e.stopPropagation(); onAddToLibrary(); }}>Add</button>
-          <button className="nq-btn nq-btn--sm" onClick={(e) => { e.stopPropagation(); onVariant(); }}>Variant</button>
+          <button className="nq-btn nq-btn--sm nq-btn--accent" onClick={(e) => { e.stopPropagation(); onAddToLibrary(); }}>加入素材库</button>
+          <button className="nq-btn nq-btn--sm" onClick={(e) => { e.stopPropagation(); onVariant(); }}>变体</button>
         </div>
       </div>
     </div>

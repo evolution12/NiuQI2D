@@ -45,6 +45,69 @@ class ProjectResponse(BaseModel):
     updated_at: datetime
 
 
+class ApiTestResponse(BaseModel):
+    success: bool
+    message: str
+    latency_ms: int | None = None
+
+
+class TestImageApiRequest(BaseModel):
+    """前端传入待测试的图片 API 配置（不必先保存）"""
+    provider: str
+    # OpenAI
+    api_key: str = ""
+    model: str = ""
+    # Volcengine
+    volcengine_access_key: str = ""
+    volcengine_secret_key: str = ""
+    volcengine_req_key: str = "high_aes_general_v21"
+    # Doubao
+    doubao_api_key: str = ""
+    doubao_model: str = "doubao-seedream-4-5-251128"
+
+
+class TestTextApiRequest(BaseModel):
+    """前端传入待测试的文本 API 配置（不必先保存）"""
+    provider: str
+    api_key: str = ""
+    model: str = ""
+
+
+class SettingsResponse(BaseModel):
+    image_api_provider: str
+    image_api_key_set: bool
+    image_api_model: str
+    text_api_provider: str
+    text_api_key_set: bool
+    text_api_model: str
+    preview_image_model: str
+    quality_image_model: str
+    volcengine_access_key_set: bool = False
+    volcengine_req_key: str = "high_aes_general_v21"
+    doubao_api_key_set: bool = False
+    doubao_model: str = "doubao-seedream-4-5-251128"
+    default_style_id: str | None = None
+    default_export_path: str = ""
+
+
+class UpdateSettingsRequest(BaseModel):
+    image_api_provider: str | None = None
+    image_api_key: str | None = None
+    image_api_model: str | None = None
+    text_api_provider: str | None = None
+    text_api_key: str | None = None
+    text_api_model: str | None = None
+    preview_image_model: str | None = None
+    quality_image_model: str | None = None
+    volcengine_access_key: str | None = None
+    volcengine_secret_key: str | None = None
+    volcengine_req_key: str | None = None
+    doubao_api_key: str | None = None
+    doubao_model: str | None = None
+    default_style_id: str | None = None
+    default_export_path: str | None = None
+
+
 class StyleProfileCreateRequest(BaseModel):
     name: str
     art_style: ArtStyle
@@ -115,10 +178,11 @@ class AssetResponse(BaseModel):
 
 
 class GenerationRecordCreateRequest(BaseModel):
+    project_id: str
     asset_id: str | None = None
     user_prompt: str
     optimized_prompt: str
-    style_id: str
+    style_id: str | None = None
     asset_type: AssetType
     asset_subtype: AssetSubtype | None = None
     api_provider: str
@@ -148,10 +212,11 @@ class GenerationRecordResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    project_id: str
     asset_id: str | None
     user_prompt: str
     optimized_prompt: str
-    style_id: str
+    style_id: str | None = None
     asset_type: AssetType
     asset_subtype: AssetSubtype | None
     api_provider: str
@@ -197,3 +262,57 @@ class UploadResponse(BaseModel):
     filename: str
     size: int
     content_type: str
+
+
+# ---- M2-04: Generate API schemas ----
+
+
+class GenerateRequest(BaseModel):
+    project_id: str
+    user_prompt: str
+    asset_type: AssetType
+    asset_subtype: AssetSubtype | None = None
+    style_id: str | None = None
+    reference_image_path: str | None = None
+    reference_style_description: str | None = None
+
+    # Character-specific
+    direction_count: int = 4
+    frame_count: int = 3
+    actions: list[str] | None = None
+    target_size: tuple[int, int] = (16, 16)
+
+    # Generation params
+    preview_mode: bool = False
+    transparent_background: bool = True
+
+
+class GenerationRecordDetailResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    image_url: str
+    user_prompt: str
+    optimized_prompt: str
+    style_id: str | None = None
+    asset_type: AssetType
+    asset_subtype: AssetSubtype | None
+    api_provider: str
+    api_model: str
+    seed: str | None
+    postprocess_log: list[PostProcessLog]
+    created_at: datetime
+
+
+class GenerateResponse(BaseModel):
+    records: list[GenerationRecordDetailResponse]
+    optimized_prompt: str
+
+
+class SelectRecordRequest(BaseModel):
+    name: str
+    tags: list[str] = Field(default_factory=list)
+
+
+class SelectRecordResponse(BaseModel):
+    asset: AssetResponse
