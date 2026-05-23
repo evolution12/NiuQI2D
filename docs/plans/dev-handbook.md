@@ -131,7 +131,7 @@ class AssetType(str, Enum):
 ```
 ```typescript
 // TypeScript
-type AssetType = "character" | "tile";
+type AssetType = "character" | "tile" | "prop" | "ui" | "effect";
 ```
 
 ---
@@ -180,3 +180,41 @@ type AssetType = "character" | "tile";
 - 快速预览：`preview_image_model`（默认 dall-e-3），4-6 候选
 - 高质量：`quality_image_model`（默认 gpt-image-1），2-3 候选
 - 用户在设置页自定义模型，应用不提供任何内置 API 服务
+
+---
+
+## 7. 数据结构约定
+
+**StyleProfile.extra_params 按画风的结构：**
+
+```python
+# pixel
+{"color_count": int, "outline": bool}
+# 示例：{"color_count": 16, "outline": true}
+
+# hand_drawn
+{"line_width": str, "watercolor": bool}
+# 示例：{"line_width": "varied", "watercolor": false}
+
+# cartoon
+{"bold_outlines": bool, "cel_shading": bool}
+# 示例：{"bold_outlines": true, "cel_shading": true}
+
+# realistic
+{} # 无额外参数
+
+# custom
+# 自由字段，由用户和参考图分析结果决定
+```
+
+**角色素材子类型（AssetSubtype）：**
+
+```python
+class AssetSubtype(str, Enum):
+    STATIC_IMAGE = "static_image"              # 静态单图
+    ANIMATED_SPRITESHEET = "animated_spritesheet"  # 动画 Sprite Sheet
+```
+
+- `asset_type=tile` 时无子类型
+- `asset_type=character` 时必须选择子类型
+- 子类型决定 Prompt 模板、后处理管线分支、导出格式

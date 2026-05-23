@@ -33,6 +33,20 @@ M1-03（数据库 CRUD）、M1-05（文件上传 API）
 - [ ] `GET /api/v1/styles/{id}` 单个风格详情
 - [ ] `POST /api/v1/styles` 创建自定义风格
 - [ ] `PUT /api/v1/styles/{id}` 更新风格参数
+
+**`POST /api/v1/styles` 请求体：**
+
+```python
+class CreateStyleRequest(BaseModel):
+    name: str
+    art_style: ArtStyle
+    color_palette: list[str] | None = None       # ["#2d1b00", "#4a8c3f"]
+    default_size: dict = {"w": 16, "h": 16}
+    perspective: Perspective = Perspective.TOP_DOWN
+    extra_params: dict | None = None
+```
+
+**`PUT /api/v1/styles/{id}` 请求体：** 与 CreateStyleRequest 相同，所有字段可选。
 - [ ] `DELETE /api/v1/styles/{id}` 删除自定义风格（预设风格不可删除）
 - [ ] `POST /api/v1/styles/{id}/reference` 上传参考图并自动提取风格描述
 - [ ] `DELETE /api/v1/styles/{id}/reference` 删除参考图
@@ -49,6 +63,19 @@ class ReferenceUploadResponse(BaseModel):
     style_description: str       # 视觉 LLM 提取的风格描述
     # 示例："pixel art style, 16x16, top-down perspective, limited color palette
     #        with earthy tones, bold outlines, no anti-aliasing, flat shading"
+```
+
+**风格描述传递链路（M4 → M2）：**
+
+```
+参考图上传 → 视觉 LLM 提取 style_description
+                    │
+                    ▼
+          存入 StyleProfile.extra_params["reference_style_description"]
+                    │
+                    ▼
+    生成时（M2-04 GenerateRequest）：从 StyleProfile.extra_params 中读取
+    reference_style_description 字段，传入 PromptOptimizer.optimize()
 ```
 
 **`reference_analyzer.py` 核心接口：**
@@ -199,7 +226,7 @@ class VariantRequest(BaseModel):
     prompt_override: str | None = None           # 覆盖描述文本
     style_id_override: str | None = None         # 切换风格
     target_size_override: tuple[int, int] | None = None  # 修改尺寸
-    perspective_override: str | None = None      # 修改视角
+    perspective_override: Perspective | None = None  # 修改视角（使用 Perspective 枚举）
     reference_image_path: str | None = None      # 替换参考图
     reference_style_description: str | None = None  # 替换参考图风格描述
     seed_override: str | None = None

@@ -74,6 +74,7 @@ def build_sprite_sheet(
 **帧对齐算法要点：**
 
 ```
+0. 检测实际帧尺寸是否一致，如不一致则统一缩放到目标帧尺寸（像素风用 NEAREST）
 1. 对每帧图片计算非透明区域的边界框 (bounding box)
 2. 计算所有帧边界框的最大宽高 (max_w, max_h)
 3. 对每帧：将主体在 max_w × max_h 画布内居中
@@ -234,13 +235,20 @@ M1-03（数据库 CRUD）
 - [ ] `POST /api/v1/assets/batch-delete` 批量删除
 - [ ] `GET /api/v1/assets/{id}/animation` 返回动画帧序列（角色类资产）
 - [ ] 缩略图自动生成（资产创建时触发，按素材类型区分尺寸）
+- [ ] `GET /api/v1/tags?project_id=xxx` 返回项目内所有标签列表（用于筛选器下拉选项）
 
 ### 接口约定
 
 **`GET /api/v1/assets`**
 
+**`GET /api/v1/tags`**
+
 ```python
-class AssetListParams:
+class TagsResponse(BaseModel):
+    tags: list[str]             # 去重后的标签列表，如 ["弓箭手", "森林", "NPC", "草地"]
+```
+
+**`GET /api/v1/assets`**
     project_id: str
     asset_type: AssetType | None = None
     status: AssetStatus | None = None

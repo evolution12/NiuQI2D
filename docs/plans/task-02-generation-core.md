@@ -8,7 +8,7 @@
 
 ### 职责
 
-实现 Prompt 优化器，调用文字 LLM 将用户描述 + 风格参数 + 素材类型模板重写为专业图片生成 Prompt。支持参考图风格描述注入。
+实现 Prompt 优化器，调用文字 LLM 将用户描述 + 风格参数 + 素材类型模板重写为专业图片生成 Prompt。支持参考图风格描述注入。角色素材支持子类型：静态单图 vs 动画 Sprite Sheet。
 
 ### 涉及文件
 
@@ -29,10 +29,14 @@ M1-02（FastAPI 服务初始化）、M1-03（数据库，读取风格档案）
 ### 验收标准
 
 - [ ] 输入用户描述 + 素材类型 + 风格参数，输出优化后的 Prompt
-- [ ] 角色模板注入：Sprite Sheet 布局关键词（行列数、每帧尺寸、网格排列、方向顺序、帧数）
+- [ ] 角色素材支持子类型（`AssetSubtype`）：
+  - `static_image`：生成单张静态角色图，使用角色单图模板
+  - `animated_spritesheet`：生成多帧动画 Sprite Sheet，使用 Sprite Sheet 模板
+- [ ] 角色模板注入：
+  - Sprite Sheet 模板：行列数、每帧尺寸、网格排列、方向顺序、帧数、动作列表
+  - 静态单图模板：单角色居中、清晰轮廓、指定视角
 - [ ] Tile 模板注入：无缝拼接、边缘规则、重复纹理、地形类型等关键词
 - [ ] 结合风格参数（art_style、perspective、default_size）注入画风描述词
-- [ ] API 能力感知：当前 API 支持透明背景时加入 `transparent background`
 - [ ] 支持参考图风格描述作为额外输入（由 M4-01 的视觉 LLM 生成）
 - [ ] 输出 Prompt 长度合理（200-500 词），不超出图片 API 的 Prompt 限制
 - [ ] 处理超时和 API 错误，返回有意义的错误信息
@@ -42,6 +46,11 @@ M1-02（FastAPI 服务初始化）、M1-03（数据库，读取风格档案）
 **核心函数签名：**
 
 ```python
+# 角色素材子类型枚举
+class AssetSubtype(str, Enum):
+    STATIC_IMAGE = "static_image"               # 静态单图
+    ANIMATED_SPRITESHEET = "animated_spritesheet"  # 动画 Sprite Sheet
+
 class PromptOptimizer:
     def __init__(self, api_provider: str, api_key: str, api_model: str): ...
 
@@ -49,16 +58,13 @@ class PromptOptimizer:
         self,
         user_prompt: str,
         asset_type: AssetType,
-        style: StyleProfile,
-        api_capabilities: ApiCapabilities,
-        reference_style_description: str | None = None,  # 参考图视觉描述（M4-01 生成）
+        asset_subtype: AssetSubtype | None = None,  # 仅角色类型需要
+        style: StyleProfile = None,
+        reference_style_description: str | None = None,
+        actions: list[str] | None = None,           # 动作列表，仅 animated_spritesheet，如 ["idle", "walk", "attack"]
+        direction_count: int = 4,                   # 仅 animated_spritesheet
+        frame_count: int = 3,                       # 仅 animated_spritesheet
     ) -> OptimizedPrompt:
-
-@dataclass
-class ApiCapabilities:
-    supports_transparent_background: bool
-    max_image_size: tuple[int, int]
-    supported_sizes: list[tuple[int, int]]
 
 @dataclass
 class OptimizedPrompt:
@@ -77,23 +83,33 @@ class OptimizedPrompt:
 1. 保持用户描述的核心意图不变
 2. 根据素材类型模板注入专业关键词
 3. 根据风格参数调整画风描述
-4. 如果 API 支持透明背景，在 Prompt 中明确要求纯色背景便于后期处理
-5. 如果提供了参考图风格描述，融合其视觉特征关键词
-6. 输出英文 Prompt
-7. 不要输出解释性文字，只输出 Prompt 本身
+4. 如果提供了参考图风格描述，融合其视觉特征关键词
+5. 输出英文 Prompt
+6. 不要输出解释性文字，只输出 Prompt 本身
 ```
 
 **角色 Sprite Sheet 模板（`character_prompt.py`）：**
 
 ```python
+# 动画 Sprite Sheet 模板
 CHARACTER_SPRITESHEET_TEMPLATE = """
 {style_keywords} sprite sheet of {user_description},
 {perspective} view, {direction_count} rows (one per direction: {directions}),
 {frame_count} columns per row ({frame_count} animation frames per direction),
+actions: {actions},
 each cell {cell_size}px × {cell_size}px,
 arranged in a clean grid layout with no overlap, uniform cell size,
 character centered in each cell, clean outlines,
 game asset style, no background elements,
+{extra_style_keywords}
+"""
+
+# 静态单图模板
+CHARACTER_STATIC_TEMPLATE = """
+{style_keywords} character sprite of {user_description},
+{perspective} view, centered composition, clean outlines,
+{cell_size}px × {cell_size}px, game asset style,
+no background elements, single pose,
 {extra_style_keywords}
 """
 ```
@@ -164,16 +180,12 @@ class ImageGeneratorBase(ABC):
         seed: str | None = None,
     ) -> list[GeneratedImage]:
 
-    @abstractmethod
-    def get_capabilities(self) -> ApiCapabilities:
-
 @dataclass
 class GeneratedImage:
     image_data: bytes             # PNG 二进制
     seed: str | None
     revised_prompt: str | None
     size: tuple[int, int]
-    cost: float
 ```
 
 **OpenAI 提供商实现要点：**
@@ -229,7 +241,7 @@ M1-02（FastAPI 服务初始化）
 ### 验收标准
 
 - [ ] 管线为条件式，每个步骤根据输入参数决定是否执行
-- [ ] **帧提取（仅角色动画）：** 从 AI 生成的 Sprite Sheet 图片中，按网格切割为独立帧。假设行列数与 Prompt 指定的一致，检测每帧边界并切割
+- [ ] **帧提取（仅 `animated_spritesheet`）：** 从 AI 生成的 Sprite Sheet 图片中，按网格切割为独立帧。`static_image` 和 Tile 类型跳过此步骤
 - [ ] **去背景：** 当 `api_had_transparent_bg=False` 时，使用 rembg 去背景；否则跳过
 - [ ] **裁切居中：** 始终执行。裁掉透明区域多余空白，将主体居中
 - [ ] **尺寸标准化：** 始终执行。像素风使用 `Image.NEAREST`；其他风格使用 `Image.LANCZOS`
@@ -245,8 +257,9 @@ M1-02（FastAPI 服务初始化）
 class PostProcessContext:
     """后处理管线上下文，在步骤间传递"""
     image: PIL.Image.Image           # 当前图片（初始为 AI 生成的完整图）
-    extracted_frames: list[PIL.Image.Image]  # 帧提取后的独立帧列表（仅角色动画）
+    extracted_frames: list[PIL.Image.Image]  # 帧提取后的独立帧列表（仅 animated_spritesheet）
     asset_type: AssetType
+    asset_subtype: AssetSubtype | None       # 角色子类型
     style: StyleProfile
     api_had_transparent_bg: bool
     target_size: tuple[int, int]
@@ -316,13 +329,15 @@ class GenerateRequest(BaseModel):
     project_id: str
     user_prompt: str
     asset_type: AssetType                     # character / tile
+    asset_subtype: AssetSubtype | None = None # 角色子类型：static_image / animated_spritesheet
     style_id: str | None = None               # 不传则用项目默认风格
     reference_image_path: str | None = None   # 参考图路径（通过 M1-05 上传获得）
     reference_style_description: str | None = None  # 参考图风格描述（M4 提供，V1 可为空）
 
     # 角色专用参数
-    direction_count: int = 4
-    frame_count: int = 3
+    direction_count: int = 4                  # 仅 animated_spritesheet
+    frame_count: int = 3                      # 仅 animated_spritesheet
+    actions: list[str] | None = None          # 动作列表，如 ["idle", "walk", "attack"]，仅 animated_spritesheet
     target_size: tuple[int, int] = (16, 16)
 
     # 生成参数
@@ -338,9 +353,13 @@ class GenerationRecordResponse(BaseModel):
     image_url: str                            # /images/{project_id}/raw/{record_id}.png
     user_prompt: str
     optimized_prompt: str
+    style_id: str
+    asset_type: AssetType
+    asset_subtype: AssetSubtype | None
+    api_provider: str
+    api_model: str
     seed: str | None
-    cost: float
-    postprocess_log: list[dict]
+    postprocess_log: list[PostProcessLog]
     created_at: str
 ```
 
@@ -406,10 +425,12 @@ M1-06（React 项目初始化）、M2-04（生成 API）
 
 ### 验收标准
 
-- [ ] 素材类型选择器（角色动画 / Tile），选中态视觉区分明确
+- [ ] 素材类型选择器（角色 / Tile），选中态视觉区分明确
+- [ ] 选择"角色"后显示子类型选择器（静态单图 / 动画 Sprite Sheet），子类型决定后续参数面板字段
 - [ ] 多行文本输入框，Enter 提交（Shift+Enter 换行）
-- [ ] 参数面板根据素材类型动态切换：
-  - 角色模式：风格选择、尺寸、视角、帧数、方向数
+- [ ] 参数面板根据素材类型和子类型动态切换：
+  - 角色静态单图：风格选择、尺寸、视角
+  - 角色动画 Sprite Sheet：风格选择、尺寸、视角、帧数、方向数、动作列表（可多选，预设 idle/walk/attack/hurt/die + 自定义输入）
   - Tile 模式：风格选择、尺寸、边缘规则
 - [ ] 参考图上传区（拖拽 + 点击），调用 M1-05 上传 API，上传后显示预览
 - [ ] "快速预览" 和 "高质量生成" 两个按钮
@@ -419,7 +440,9 @@ M1-06（React 项目初始化）、M2-04（生成 API）
 - [ ] 点击候选图放大查看（Sprite Sheet 整图预览）
 - [ ] 每个候选可操作：加入资产库 / 重试 / 生成变体
 - [ ] 加入资产库时弹出命名对话框
-- [ ] 空状态有引导文案
+- [ ] 空状态引导文案（区分两种场景）：
+  - **无当前项目：** 显示"请先创建或选择一个项目"引导，带跳转按钮
+  - **无生成结果：** 显示"输入描述开始生成"引导
 
 ### 接口约定
 
@@ -431,10 +454,12 @@ interface ParamPanelProps {
 
 interface GenerateParams {
   asset_type: AssetType;
+  asset_subtype?: AssetSubtype;   // static_image / animated_spritesheet
   style_id?: string;
   target_size: [number, number];
-  direction_count?: number;    // 角色
-  frame_count?: number;        // 角色
+  direction_count?: number;       // 仅 animated_spritesheet
+  frame_count?: number;           // 仅 animated_spritesheet
+  actions?: string[];             // 动作列表，仅 animated_spritesheet
   reference_image_path?: string;
 }
 
