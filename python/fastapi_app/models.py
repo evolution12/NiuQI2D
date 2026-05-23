@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -92,6 +92,7 @@ class StyleProfile(Base, TimestampMixin):
     default_size: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, default=dict)
     perspective: Mapped[Perspective] = mapped_column(SAEnum(Perspective), nullable=False)
     extra_params: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    is_preset: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     generation_records: Mapped[list[GenerationRecord]] = relationship(back_populates="style")
 

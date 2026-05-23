@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .providers.base import GenerationMode
 from .models import ArtStyle, AssetStatus, AssetSubtype, AssetType, ExportFormat, Perspective
 
 
@@ -76,8 +77,20 @@ class StyleProfileResponse(BaseModel):
     default_size: dict[str, int]
     perspective: Perspective
     extra_params: dict[str, Any] | None
+    is_preset: bool = False
     created_at: datetime
     updated_at: datetime
+
+
+class ProjectDetailResponse(ProjectResponse):
+    style: StyleProfileResponse | None = None
+    asset_count: int
+    latest_asset_at: datetime | None = None
+
+
+class ReferenceUploadResponse(BaseModel):
+    reference_image_path: str
+    style_description: str
 
 
 class AssetCreateRequest(BaseModel):
@@ -86,7 +99,7 @@ class AssetCreateRequest(BaseModel):
     asset_type: AssetType
     status: AssetStatus = AssetStatus.DRAFT
     source_path: str
-    thumbnail_path: str
+    thumbnail_path: str | None = None
     tags: list[str] = Field(default_factory=list)
 
 
@@ -112,6 +125,32 @@ class AssetResponse(BaseModel):
     tags: list[str]
     created_at: datetime
     updated_at: datetime
+
+
+class AssetListResponse(BaseModel):
+    items: list[AssetResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class AssetBatchDeleteRequest(BaseModel):
+    asset_ids: list[str]
+
+
+class AssetBatchDeleteResponse(BaseModel):
+    deleted_ids: list[str]
+
+
+class TagsResponse(BaseModel):
+    tags: list[str]
+
+
+class AnimationResponse(BaseModel):
+    frames: list[str]
+    frame_count: int
+    frame_delay_ms: int = 120
+    actions: dict[str, list[int]] = Field(default_factory=dict)
 
 
 class GenerationRecordCreateRequest(BaseModel):
@@ -163,6 +202,54 @@ class GenerationRecordResponse(BaseModel):
     created_at: datetime
 
 
+class GenerationCandidateResponse(GenerationRecordResponse):
+    image_url: str | None = None
+
+
+class GenerateRequest(BaseModel):
+    project_id: str
+    user_prompt: str
+    asset_type: AssetType
+    asset_subtype: AssetSubtype | None = None
+    style_id: str | None = None
+    reference_image_path: str | None = None
+    reference_style_description: str | None = None
+    direction_count: int = 4
+    frame_count: int = 3
+    actions: list[str] | None = None
+    target_size: tuple[int, int] = (16, 16)
+    preview_mode: bool = False
+    transparent_background: bool = True
+    candidate_count: int | None = None
+    seed: str | None = None
+
+
+class GenerateResponse(BaseModel):
+    records: list[GenerationCandidateResponse]
+    optimized_prompt: str
+    mode: GenerationMode
+
+
+class SelectRecordRequest(BaseModel):
+    name: str
+    tags: list[str] = Field(default_factory=list)
+
+
+class SelectRecordResponse(BaseModel):
+    asset: AssetResponse
+
+
+class VariantRequest(BaseModel):
+    prompt_override: str | None = None
+    style_id_override: str | None = None
+    target_size_override: tuple[int, int] | None = None
+    perspective_override: Perspective | None = None
+    reference_image_path: str | None = None
+    reference_style_description: str | None = None
+    seed_override: str | None = None
+    candidate_count: int | None = None
+
+
 class ExportRecordCreateRequest(BaseModel):
     asset_ids: list[str]
     export_format: ExportFormat
@@ -197,3 +284,35 @@ class UploadResponse(BaseModel):
     filename: str
     size: int
     content_type: str
+
+
+class SettingsResponse(BaseModel):
+    image_api_provider: str
+    image_api_key_set: bool
+    image_api_model: str
+    text_api_provider: str
+    text_api_key_set: bool
+    text_api_model: str
+    preview_image_model: str
+    quality_image_model: str
+    default_style_id: str | None = None
+    default_export_path: str = ""
+
+
+class UpdateSettingsRequest(BaseModel):
+    image_api_provider: str | None = None
+    image_api_key: str | None = None
+    image_api_model: str | None = None
+    text_api_provider: str | None = None
+    text_api_key: str | None = None
+    text_api_model: str | None = None
+    preview_image_model: str | None = None
+    quality_image_model: str | None = None
+    default_style_id: str | None = None
+    default_export_path: str | None = None
+
+
+class ApiTestResponse(BaseModel):
+    success: bool
+    message: str
+    latency_ms: int | None = None
