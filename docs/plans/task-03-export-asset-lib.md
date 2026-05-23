@@ -8,19 +8,19 @@
 
 ### 职责
 
-实现多帧图片的 Sprite Sheet 拼接，支持按动作/方向排列、帧间对齐、间距/补边配置。
+实现多帧图片的 Sprite Sheet 拼接，支持按动作/方向排列、帧间对齐、间距/补边配置。接收 M2 后处理管线输出的独立帧列表作为输入。
 
 ### 涉及文件
 
 ```
 python/fastapi_app/
 ├── postprocess/
-│   └── spritesheet.py           # Sprite Sheet 拼接（完善 M2 骨架）
+│   └── spritesheet.py           # Sprite Sheet 拼接（本任务完全实现）
 ```
 
 ### 依赖
 
-M2-03（后处理管线）
+M2-03（后处理管线，输出独立帧列表）
 
 ### 验收标准
 
@@ -44,8 +44,8 @@ class SpriteSheetConfig:
 
 @dataclass
 class SpriteSheetResult:
-    sheet_image: PIL.Image.Image         # 拼接后的 Sprite Sheet
-    frames_metadata: list[FrameMetadata] # 每帧元数据
+    sheet_image: PIL.Image.Image
+    frames_metadata: list[FrameMetadata]
 
 @dataclass
 class FrameMetadata:
@@ -66,7 +66,8 @@ def build_sprite_sheet(
     frames_per_action: int,         # 3
 ) -> SpriteSheetResult:
     """
-    frames 按顺序排列：[idle_down_0, idle_down_1, idle_down_2, idle_up_0, ...]
+    frames 按 M2 后处理管线输出的顺序排列：
+    [idle_down_0, idle_down_1, idle_down_2, idle_up_0, ...]
     """
 ```
 
@@ -140,7 +141,7 @@ def build_tileset(
 
 ### 职责
 
-实现导出功能的 HTTP API，串联资产查询 → 拼接 → JSON 生成 → 文件写入。
+实现导出功能的 HTTP API，串联资产查询 → 拼接 → JSON 生成 → 文件写入 → 资产状态更新。
 
 ### 涉及文件
 
@@ -164,6 +165,7 @@ M3-01（Sprite Sheet）、M3-02（Tileset）
 - [ ] Tileset + JSON：调用拼接引擎，输出 PNG + JSON
 - [ ] JSON 格式严格遵循设计文档第 5 节规范
 - [ ] 导出记录写入 ExportRecord 表
+- [ ] 导出成功后将关联资产的 status 更新为 `exported`
 - [ ] 支持批量导出（多个资产合并为一个 Sprite Sheet）
 - [ ] 导出路径不存在时自动创建
 
@@ -174,11 +176,11 @@ M3-01（Sprite Sheet）、M3-02（Tileset）
 ```python
 class ExportRequest(BaseModel):
     asset_ids: list[str]
-    export_format: ExportFormat       # png_single / spritesheet_png_json / tileset_png_json
-    export_path: str                  # 用户选择的导出目录
+    export_format: ExportFormat
+    export_path: str
 
     # Sprite Sheet 选项
-    sheet_layout: str = "by_action"   # by_action / flat
+    sheet_layout: str = "by_action"
     sheet_padding: int = 0
     sheet_margin: int = 0
 
@@ -190,7 +192,7 @@ class ExportRequest(BaseModel):
 class ExportResponse(BaseModel):
     export_id: str
     files: list[ExportFileInfo]
-    total_size: int                   # 总文件大小（字节）
+    total_size: int
 
 class ExportFileInfo(BaseModel):
     filename: str
@@ -231,7 +233,7 @@ M1-03（数据库 CRUD）
 - [ ] `DELETE /api/v1/assets/{id}` 删除资产（同时删除文件）
 - [ ] `POST /api/v1/assets/batch-delete` 批量删除
 - [ ] `GET /api/v1/assets/{id}/animation` 返回动画帧序列（角色类资产）
-- [ ] 缩略图自动生成（资产创建时触发）
+- [ ] 缩略图自动生成（资产创建时触发，按素材类型区分尺寸）
 
 ### 接口约定
 
@@ -243,11 +245,11 @@ class AssetListParams:
     asset_type: AssetType | None = None
     status: AssetStatus | None = None
     tag: str | None = None
-    search: str | None = None       # 名称模糊搜索
+    search: str | None = None
     page: int = 1
     page_size: int = 20
-    sort_by: str = "created_at"     # created_at / name / updated_at
-    sort_order: str = "desc"        # asc / desc
+    sort_by: str = "created_at"
+    sort_order: str = "desc"
 
 class AssetListResponse(BaseModel):
     items: list[AssetResponse]
@@ -292,7 +294,7 @@ src/
 
 ### 依赖
 
-M1-05（React 项目）、M3-04（资产管理 API）
+M1-06（React 项目）、M3-04（资产管理 API）
 
 ### 验收标准
 
@@ -312,18 +314,16 @@ M1-05（React 项目）、M3-04（资产管理 API）
 ### 接口约定
 
 ```typescript
-// AssetDetailPanel 展示的详情
 interface AssetDetail {
   asset: Asset;
-  generation_records: GenerationRecord[];  // 该资产的所有生成记录
-  animation?: AnimationResponse;           // 角色类资产
+  generation_records: GenerationRecord[];
+  animation?: AnimationResponse;
 }
 
-// AnimationPlayer
 interface AnimationPlayerProps {
-  frames: string[];              // 每帧图片 URL
-  frameDelayMs: number;          // 默认帧间隔
-  actions?: Record<string, number[]>;  // 动作分组
+  frames: string[];
+  frameDelayMs: number;
+  actions?: Record<string, number[]>;
 }
 ```
 
@@ -352,7 +352,7 @@ src/
 
 ### 依赖
 
-M1-05（React 项目）、M3-03（导出 API）
+M1-06（React 项目）、M3-03（导出 API）
 
 ### 验收标准
 
@@ -378,7 +378,6 @@ interface ExportPageState {
   config: ExportConfig;
 }
 
-// 根据导出类型切换配置
 type ExportConfig =
   | { format: "png_single" }
   | { format: "spritesheet_png_json"; layout: string; padding: number; margin: number }

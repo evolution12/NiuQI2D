@@ -1,6 +1,6 @@
 # M1：项目脚手架与基础框架
 
-> 里程碑目标：Electron 能启动，Python 服务能运行，数据库能读写，React 页面能渲染，三层能通信。
+> 里程碑目标：Electron 能启动，Python 服务能运行，数据库能读写，React 页面能渲染，文件上传可用，三层能通信。
 
 ---
 
@@ -8,7 +8,7 @@
 
 ### 职责
 
-搭建 Electron 主进程，配置窗口、IPC 通信桥、开发构建工具链。
+搭建 Electron 主进程，配置窗口、IPC 通信桥、开发构建工具链、Python 子进程管理（区分开发/生产模式）。
 
 ### 涉及文件
 
@@ -16,7 +16,7 @@
 electron/
 ├── main.ts                  # Electron 主进程入口
 ├── preload.ts               # preload 脚本，暴露安全 API 给渲染进程
-├── python-manager.ts        # Python 子进程生命周期管理
+├── python-manager.ts        # Python 子进程生命周期管理（开发/生产模式）
 └── ipc-handlers.ts          # 主进程 IPC handler 注册
 package.json                  # 项目配置（Electron、构建脚本）
 electron-builder.yml          # 打包配置
@@ -54,17 +54,20 @@ interface ElectronAPI {
   app: {
     getVersion(): string;
     getDataPath(): string;              // 应用数据目录
+    isDev(): boolean;                   // 是否开发模式
   };
 }
 ```
 
 **`python-manager.ts` 核心逻辑：**
 
-- 启动时在 `resources/python/` 目录下找到 Python 可执行文件
-- 拉起 `python -m fastapi_app` 子进程，监听 `--port {随机端口}`
-- 通过轮询 `GET /health` 确认服务就绪
+- 判断开发/生产模式：`app.isPackaged` 为 false 则为开发模式
+- **开发模式：** 使用 `python/.venv/Scripts/python.exe`（Windows），传入环境变量 `NIUQI2D_DEV=1`
+- **生产模式：** 使用 `resources/python/python.exe`（嵌入式包），不传 `NIUQI2D_DEV`
+- 拉起 `python -m fastapi_app --port {随机端口}`
+- 通过轮询 `GET /health` 确认服务就绪（间隔 500ms，超时 30s）
 - 端口号写入环境变量，渲染进程通过 IPC 获取
-- 应用关闭时发送 SIGTERM 并等待进程退出（超时后 kill）
+- 应用关闭时发送 SIGTERM 并等待进程退出（超时 10s 后 kill）
 
 ---
 
@@ -72,7 +75,7 @@ interface ElectronAPI {
 
 ### 职责
 
-搭建 Python FastAPI 后端服务，定义目录结构、配置管理、健康检查接口。
+搭建 Python FastAPI 后端服务，定义目录结构、配置管理、健康检查接口、CORS 配置、静态文件服务、日志配置。
 
 ### 涉及文件
 
@@ -80,13 +83,16 @@ interface ElectronAPI {
 python/
 ├── fastapi_app/
 │   ├── __init__.py
-│   ├── main.py              # FastAPI 应用入口，挂载路由
+│   ├── main.py              # FastAPI 应用入口，挂载路由、中间件、静态文件
 │   ├── config.py            # 配置管理（从环境变量/配置文件读取）
 │   ├── database.py          # SQLite 连接管理
 │   ├── models.py            # SQLAlchemy ORM 模型定义
+│   ├── schemas.py           # Pydantic 请求/响应 schema（前后端类型同步的单一数据源）
+│   ├── exceptions.py        # 自定义异常类
 │   └── routers/
 │       ├── __init__.py
 │       ├── health.py         # GET /health 健康检查
+│       ├── upload.py         # 文件上传路由
 │       ├── projects.py       # 项目管理路由（M4 实现）
 │       ├── styles.py         # 风格管理路由（M4 实现）
 │       ├── generation.py     # 素材生成路由（M2 实现）
@@ -106,8 +112,41 @@ python/
 - [ ] `GET /health` 返回 `{"status": "ok"}`
 - [ ] 目录结构符合上方规范，路由文件已创建（可暂为空路由）
 - [ ] 配置能从环境变量和 JSON 配置文件读取
+- [ ] 开发模式下 CORS 已启用（`NIUQI2D_DEV=1` 时）
+- [ ] 静态文件服务已挂载（`/images/` 指向数据目录的 images 文件夹）
+- [ ] 日志配置完成：输出到控制台 + `{data_dir}/logs/app.log`（轮转，10MB × 3 份）
 
 ### 接口约定
+
+**`main.py` 核心配置：**
+
+```python
+import os
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(title="NiuQI2D", version="1.0.0")
+
+# CORS（仅开发模式）
+if os.getenv("NIUQI2D_DEV") == "1":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# 静态文件服务
+# 启动时在 lifespan 中动态挂载，因为 data_dir 可能需要初始化
+# app.mount("/images", StaticFiles(directory=settings.data_dir + "/images"), name="images")
+
+# 路由注册
+app.include_router(health.router)
+app.include_router(upload.router, prefix="/api/v1")
+app.include_router(projects.router, prefix="/api/v1")
+# ... 其余路由
+```
 
 **配置结构（`config.py`）：**
 
@@ -118,7 +157,7 @@ class Settings:
     port: int = 8000
 
     # 数据存储
-    data_dir: str = "~/.niuqi2d/data"         # 可通过环境变量覆盖
+    data_dir: str = "~/.niuqi2d/data"         # 可通过 NIUQI2D_DATA_DIR 覆盖
     db_path: str                               # = data_dir + "/niuqi2d.db"
 
     # API 配置（用户在设置页配置后持久化到数据库，这里提供默认值）
@@ -128,9 +167,11 @@ class Settings:
     text_api_provider: str = "openai"
     text_api_key: str = ""
     text_api_model: str = "gpt-4o-mini"
-```
 
-**API 路径前缀：** 所有路由统一加 `/api/v1` 前缀。
+    # 生成模式默认模型
+    preview_image_model: str = "dall-e-3"       # 快速预览
+    quality_image_model: str = "gpt-image-1"    # 高质量
+```
 
 ---
 
@@ -138,7 +179,7 @@ class Settings:
 
 ### 职责
 
-实现全部 5 个数据表的 ORM 模型、数据库迁移、基础 CRUD 操作。
+实现全部 5 个数据表的 ORM 模型、数据库初始化、基础 CRUD 操作。
 
 ### 涉及文件
 
@@ -205,7 +246,7 @@ class ExportFormat(str, Enum):
     TILESET_PNG_JSON = "tileset_png_json"
 ```
 
-**数据库初始化策略：** 应用启动时检查 `db_path` 是否存在，不存在则创建全部表。不使用 Alembic 迁移工具，V1 直接 `create_all()`。
+**数据库初始化策略：** 应用启动时检查 `db_path` 是否存在，不存在则创建全部表。V1 直接 `create_all()`，不使用 Alembic。后续 V2 需引入 Alembic 做数据库迁移。
 
 ---
 
@@ -230,6 +271,7 @@ M1-02（FastAPI 服务初始化）
 
 - [ ] 首次运行自动创建目录结构
 - [ ] 提供保存图片、读取图片、生成缩略图的方法
+- [ ] 缩略图尺寸按素材类型区分：character 64×64、tile 32×32、其他 128×128
 - [ ] 提供清理缓存的方法（统计占用空间 + 删除指定目录内容）
 
 ### 接口约定
@@ -239,6 +281,8 @@ M1-02（FastAPI 服务初始化）
 ```
 {data_dir}/
 ├── niuqi2d.db                           # SQLite 数据库
+├── logs/
+│   └── app.log                          # 日志文件
 ├── images/
 │   ├── {project_id}/
 │   │   ├── raw/                          # AI 生成的原始图片
@@ -267,14 +311,71 @@ class StorageManager:
     async def save_processed_image(self, project_id: str, asset_id: str, image_data: bytes) -> str
     async def save_reference_image(self, style_id: str, image_data: bytes) -> str
     async def get_image(self, path: str) -> bytes
-    async def generate_thumbnail(self, image_path: str, size: tuple = (128, 128)) -> str
+    async def generate_thumbnail(
+        self, image_path: str, asset_type: AssetType = AssetType.CHARACTER
+    ) -> str:
+        """
+        按素材类型生成缩略图：
+        - character: 64×64
+        - tile: 32×32
+        - 其他: 128×128
+        像素风使用 Image.NEAREST，其他风格使用 Image.LANCZOS
+        """
     async def get_storage_usage(self) -> dict  # {"total_mb": 128, "images_mb": 100, "exports_mb": 28}
     async def clear_cache(self, project_id: str = None) -> int  # 返回清理的 MB 数
 ```
 
 ---
 
-## M1-05 | FE | React 项目初始化
+## M1-05 | BE | 文件上传 API
+
+### 职责
+
+实现通用文件上传端点，供参考图上传、后续其他文件上传使用。
+
+### 涉及文件
+
+```
+python/fastapi_app/
+├── routers/
+│   └── upload.py               # 文件上传 API
+```
+
+### 依赖
+
+M1-02（FastAPI 服务初始化）、M1-04（文件存储管理）
+
+### 验收标准
+
+- [ ] `POST /api/v1/upload` 接受 multipart/form-data 上传
+- [ ] 支持 purpose 参数区分用途（reference / raw_image 等）
+- [ ] 文件保存到存储管理器指定的目录
+- [ ] 返回文件路径和前端可访问的 URL
+- [ ] 文件类型校验（仅允许图片格式：png/jpg/jpeg/webp）
+- [ ] 文件大小限制（默认 10MB）
+
+### 接口约定
+
+```python
+from fastapi import UploadFile
+
+class UploadRequest:
+    file: UploadFile
+    purpose: str                     # "reference" / "raw_image"
+    project_id: str | None = None    # 关联项目（purpose=raw_image 时必填）
+    style_id: str | None = None      # 关联风格（purpose=reference 时必填）
+
+class UploadResponse(BaseModel):
+    path: str                        # 存储相对路径 "references/uuid-xxx.png"
+    url: str                         # 前端访问 URL "/images/references/uuid-xxx.png"
+    filename: str                    # 存储文件名
+    size: int                        # 文件大小（字节）
+    content_type: str                # MIME 类型
+```
+
+---
+
+## M1-06 | FE | React 项目初始化
 
 ### 职责
 
@@ -307,7 +408,7 @@ src/
 ├── services/
 │   └── api.ts                 # HTTP 客户端封装（调用 Python FastAPI）
 ├── types/
-│   └── index.ts               # TypeScript 类型定义
+│   └── index.ts               # TypeScript 类型定义（对齐 schemas.py）
 ├── styles/
 │   └── globals.css            # 全局样式、CSS 变量（深色主题）
 package.json
@@ -327,6 +428,7 @@ tsconfig.json
 - [ ] 深色主题 CSS 变量已定义
 - [ ] `api.ts` 能通过 Electron preload 获取 Python 端口并发起 HTTP 请求
 - [ ] Zustand store 包含基础状态结构
+- [ ] `types/index.ts` 包含所有核心类型定义，每个类型标注对应的 Pydantic 类名
 
 ### 接口约定
 
@@ -376,6 +478,7 @@ class ApiClient {
   // 通用请求方法
   async get<T>(path: string): Promise<T>;
   async post<T>(path: string, body: unknown): Promise<T>;
+  async postFormData<T>(path: string, formData: FormData): Promise<T>;
   async delete(path: string): Promise<void>;
 }
 ```
@@ -384,11 +487,37 @@ class ApiClient {
 
 ```typescript
 // 与后端 Pydantic schema 对齐，参考设计文档第 4 节
+// 每个类型标注对应的 Pydantic 类名
+
+/** 对齐 schemas.py -> ProjectResponse */
 interface Project { id: string; name: string; style_id: string; created_at: string; updated_at: string; }
-interface StyleProfile { id: string; name: string; art_style: ArtStyle; ... }
-interface Asset { id: string; project_id: string; name: string; asset_type: AssetType; status: AssetStatus; ... }
-interface GenerationRecord { id: string; asset_id: string | null; user_prompt: string; optimized_prompt: string; ... }
-interface ExportRecord { id: string; asset_ids: string[]; export_format: ExportFormat; ... }
+
+/** 对齐 schemas.py -> StyleProfileResponse */
+interface StyleProfile { id: string; name: string; art_style: ArtStyle; color_palette: string[] | null; reference_image_path: string | null; default_size: { w: number; h: number }; perspective: Perspective; extra_params: Record<string, unknown> | null; created_at: string; updated_at: string; }
+
+/** 对齐 schemas.py -> AssetResponse */
+interface Asset { id: string; project_id: string; name: string; asset_type: AssetType; status: AssetStatus; source_path: string; thumbnail_path: string; tags: string[]; created_at: string; updated_at: string; }
+
+/** 对齐 schemas.py -> GenerationRecordResponse */
+interface GenerationRecord { id: string; asset_id: string | null; user_prompt: string; optimized_prompt: string; style_id: string; asset_type: AssetType; api_provider: string; api_model: string; api_params: Record<string, unknown>; seed: string | null; reference_image_path: string | null; postprocess_log: PostProcessLogEntry[]; cost_estimate: number; created_at: string; }
+
+/** 对齐 schemas.py -> ExportRecordResponse */
+interface ExportRecord { id: string; asset_ids: string[]; export_format: ExportFormat; export_path: string; metadata: Record<string, unknown>; file_size: number; created_at: string; }
+
+// 枚举对齐 models.py 中的 Enum 定义
+type ArtStyle = "pixel" | "hand_drawn" | "cartoon" | "realistic" | "custom";
+type Perspective = "top_down" | "side_scroller" | "isometric";
+type AssetType = "character" | "tile" | "prop" | "ui" | "effect";
+type AssetStatus = "draft" | "selected" | "exported" | "discarded";
+type ExportFormat = "png_single" | "spritesheet_png_json" | "tileset_png_json";
+
+/** 对齐 schemas.py -> PostProcessLogEntry */
+interface PostProcessLogEntry {
+  step: string;
+  executed: boolean;
+  params: Record<string, unknown>;
+  duration_ms: number;
+}
 ```
 
 ---
@@ -401,8 +530,9 @@ EL + BE + FE
 
 ### 验收标准
 
-- [ ] `npm run dev` 一条命令启动 Electron，自动拉起 Python 服务，React 页面正常显示
+- [ ] `npm run dev` 一条命令启动 Electron，自动拉起 Python 服务（开发模式用 .venv），React 页面正常显示
 - [ ] React 页面能通过 `GET /health` 确认 Python 服务状态
 - [ ] 侧边栏 + 内容区布局正确
 - [ ] 4 个页面路由可切换
+- [ ] `POST /api/v1/upload` 文件上传可用，上传后通过 `/images/` URL 可访问
 - [ ] 关闭窗口时 Python 进程正确退出

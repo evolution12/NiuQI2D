@@ -1,6 +1,6 @@
 # M2：生成闭环
 
-> 里程碑目标：用户能输入描述 → 看到优化后的 Prompt → 获得生成候选图 → 选择入库。核心生成流程跑通。
+> 里程碑目标：用户能输入描述 → 看到优化后的 Prompt → 获得生成候选图（Sprite Sheet） → 选择入库。核心生成流程跑通。
 
 ---
 
@@ -8,7 +8,7 @@
 
 ### 职责
 
-实现 Prompt 优化器，调用文字 LLM 将用户描述 + 风格参数 + 素材类型模板重写为专业图片生成 Prompt。
+实现 Prompt 优化器，调用文字 LLM 将用户描述 + 风格参数 + 素材类型模板重写为专业图片生成 Prompt。支持参考图风格描述注入。
 
 ### 涉及文件
 
@@ -18,7 +18,7 @@ python/fastapi_app/
 │   ├── __init__.py
 │   └── prompt_optimizer.py       # Prompt 优化核心逻辑
 ├── templates/
-│   ├── character_prompt.py       # 角色动画 Prompt 模板
+│   ├── character_prompt.py       # 角色动画 Sprite Sheet Prompt 模板
 │   └── tile_prompt.py            # Tile Prompt 模板
 ```
 
@@ -29,10 +29,11 @@ M1-02（FastAPI 服务初始化）、M1-03（数据库，读取风格档案）
 ### 验收标准
 
 - [ ] 输入用户描述 + 素材类型 + 风格参数，输出优化后的 Prompt
-- [ ] 角色模板注入：姿势描述、方向、帧数、锚点居中、轮廓清晰等关键词
+- [ ] 角色模板注入：Sprite Sheet 布局关键词（行列数、每帧尺寸、网格排列、方向顺序、帧数）
 - [ ] Tile 模板注入：无缝拼接、边缘规则、重复纹理、地形类型等关键词
 - [ ] 结合风格参数（art_style、perspective、default_size）注入画风描述词
 - [ ] API 能力感知：当前 API 支持透明背景时加入 `transparent background`
+- [ ] 支持参考图风格描述作为额外输入（由 M4-01 的视觉 LLM 生成）
 - [ ] 输出 Prompt 长度合理（200-500 词），不超出图片 API 的 Prompt 限制
 - [ ] 处理超时和 API 错误，返回有意义的错误信息
 
@@ -50,11 +51,8 @@ class PromptOptimizer:
         asset_type: AssetType,
         style: StyleProfile,
         api_capabilities: ApiCapabilities,
-        reference_description: str | None = None,
+        reference_style_description: str | None = None,  # 参考图视觉描述（M4-01 生成）
     ) -> OptimizedPrompt:
-        """
-        返回优化后的 Prompt 和使用的模板信息。
-        """
 
 @dataclass
 class ApiCapabilities:
@@ -79,31 +77,33 @@ class OptimizedPrompt:
 1. 保持用户描述的核心意图不变
 2. 根据素材类型模板注入专业关键词
 3. 根据风格参数调整画风描述
-4. 如果 API 支持透明背景，在 Prompt 中明确要求白色/纯色背景便于后期处理
-5. 输出英文 Prompt
-6. 不要输出解释性文字，只输出 Prompt 本身
+4. 如果 API 支持透明背景，在 Prompt 中明确要求纯色背景便于后期处理
+5. 如果提供了参考图风格描述，融合其视觉特征关键词
+6. 输出英文 Prompt
+7. 不要输出解释性文字，只输出 Prompt 本身
 ```
 
-**角色模板示例（`character_prompt.py`）：**
+**角色 Sprite Sheet 模板（`character_prompt.py`）：**
 
 ```python
-CHARACTER_TEMPLATE = """
+CHARACTER_SPRITESHEET_TEMPLATE = """
 {style_keywords} sprite sheet of {user_description},
-{perspective} view, {direction_count}-directional,
-{frame_count} frames per direction,
-character centered in each frame,
-clean outlines, {size} per frame,
+{perspective} view, {direction_count} rows (one per direction: {directions}),
+{frame_count} columns per row ({frame_count} animation frames per direction),
+each cell {cell_size}px × {cell_size}px,
+arranged in a clean grid layout with no overlap, uniform cell size,
+character centered in each cell, clean outlines,
 game asset style, no background elements,
 {extra_style_keywords}
 """
 ```
 
-**Tile 模板示例（`tile_prompt.py`）：**
+**Tile 模板（`tile_prompt.py`）：**
 
 ```python
 TILE_TEMPLATE = """
 {style_keywords} tileset of {user_description},
-seamless tiles, {size} per tile,
+seamless tiles, {tile_size}px per tile,
 {edge_rule} edges, {terrain_type} terrain,
 repeating texture, game asset style,
 {extra_style_keywords}
@@ -116,7 +116,7 @@ repeating texture, game asset style,
 
 ### 职责
 
-实现图片生成模块，封装不同 API 提供商的调用逻辑，支持多候选生成。
+实现图片生成模块，封装不同 API 提供商的调用逻辑，支持多候选生成、快速预览/高质量模式切换。
 
 ### 涉及文件
 
@@ -139,8 +139,12 @@ M1-02（FastAPI 服务初始化）、M1-03（数据库）
 - [ ] 支持通过配置切换 API 提供商（V1 先实现 OpenAI）
 - [ ] 支持单次生成和批量多候选生成（n=2~6）
 - [ ] 支持传入 `background: "transparent"` 参数（当 API 和用户选择支持时）
+- [ ] 生成模式区分：
+  - **快速预览：** 使用 `preview_image_model`（默认 dall-e-3 standard），4-6 候选
+  - **高质量：** 使用 `quality_image_model`（默认 gpt-image-1），2-3 候选
+  - 用户可在设置页自定义每种模式使用的模型
 - [ ] 生成结果（图片二进制 + API 返回元数据）持久化到文件系统
-- [ ] 生成记录写入 GenerationRecord 表（含 user_prompt、optimized_prompt、api_params、cost_estimate）
+- [ ] 生成记录写入 GenerationRecord 表
 - [ ] API 调用失败时有重试机制（最多 3 次，指数退避）
 - [ ] 超时处理（单次生成超时 60s）
 
@@ -159,19 +163,17 @@ class ImageGeneratorBase(ABC):
         transparent_background: bool = False,
         seed: str | None = None,
     ) -> list[GeneratedImage]:
-        """生成图片，返回结果列表。"""
 
     @abstractmethod
     def get_capabilities(self) -> ApiCapabilities:
-        """返回当前 API 提供商的能力。"""
 
 @dataclass
 class GeneratedImage:
     image_data: bytes             # PNG 二进制
-    seed: str | None              # 可复现种子
-    revised_prompt: str | None    # API 可能修订的 Prompt
+    seed: str | None
+    revised_prompt: str | None
     size: tuple[int, int]
-    cost: float                   # 本次调用成本（美元）
+    cost: float
 ```
 
 **OpenAI 提供商实现要点：**
@@ -191,7 +193,9 @@ class OpenAIProvider(ImageGeneratorBase):
     #   - quality: "standard" / "hd"
     #   - n: 1 (DALL-E 3 单次只能生成 1 张)
     #
-    # 注意：DALL-E 3 不支持透明背景，需要降级到后处理去背景
+    # 多候选策略：
+    #   - DALL-E 3 (n=1): 循环调用 N 次获得 N 张候选
+    #   - gpt-image-1 (n=1-4): 单次请求获得 min(n,4) 张
 ```
 
 ---
@@ -200,21 +204,21 @@ class OpenAIProvider(ImageGeneratorBase):
 
 ### 职责
 
-实现条件式后处理管线：去背景、裁切居中、尺寸标准化、Sprite Sheet 拼接、色板量化。
+实现条件式后处理管线：帧提取（从 Sprite Sheet 切割）、去背景、裁切居中、尺寸标准化、色板量化。
 
 ### 涉及文件
 
 ```
 python/fastapi_app/
 ├── services/
-│   └── postprocess.py           # 后处理管线
+│   └── postprocess.py           # 后处理管线编排
 ├── postprocess/
 │   ├── __init__.py
 │   ├── base.py                  # 管线步骤基类
+│   ├── frame_extractor.py       # 帧提取（从 AI 生成的 Sprite Sheet 切割为独立帧）
 │   ├── remove_bg.py             # 去背景（rembg）
 │   ├── crop_center.py           # 裁切 + 居中
 │   ├── resize.py                # 尺寸标准化
-│   ├── spritesheet.py           # Sprite Sheet 拼接（M3 完善细节）
 │   └── quantize.py              # 色板量化
 ```
 
@@ -225,13 +229,14 @@ M1-02（FastAPI 服务初始化）
 ### 验收标准
 
 - [ ] 管线为条件式，每个步骤根据输入参数决定是否执行
-- [ ] **去背景：** 当 `transparent_background=False`（API 不支持或用户未选）时，使用 rembg 去背景；否则跳过
+- [ ] **帧提取（仅角色动画）：** 从 AI 生成的 Sprite Sheet 图片中，按网格切割为独立帧。假设行列数与 Prompt 指定的一致，检测每帧边界并切割
+- [ ] **去背景：** 当 `api_had_transparent_bg=False` 时，使用 rembg 去背景；否则跳过
 - [ ] **裁切居中：** 始终执行。裁掉透明区域多余空白，将主体居中
-- [ ] **尺寸标准化：** 始终执行。缩放到目标尺寸。像素风使用 `Image.NEAREST`（最近邻插值，不做抗锯齿）；其他风格使用 `Image.LANCZOS`
-- [ ] **Sprite Sheet 拼接：** 当 `asset_type=character` 时执行（M3 完善帧分割逻辑）
-- [ ] **色板量化：** 当 `art_style=pixel` 时执行，限制颜色数量（如 16 色、32 色）
-- [ ] 每个步骤执行后记录到 `postprocess_log`
+- [ ] **尺寸标准化：** 始终执行。像素风使用 `Image.NEAREST`；其他风格使用 `Image.LANCZOS`
+- [ ] **色板量化：** 当 `art_style=pixel` 时执行，限制颜色数量
+- [ ] 每个步骤执行后记录到 `postprocess_log`（结构见下方）
 - [ ] 整个管线处理单张图片耗时 < 5s（不含去背景；去背景 < 10s）
+- [ ] Sprite Sheet 拼接不在本任务范围（M3-01 负责）。本任务输出的是独立帧图片列表
 
 ### 接口约定
 
@@ -239,12 +244,15 @@ M1-02（FastAPI 服务初始化）
 @dataclass
 class PostProcessContext:
     """后处理管线上下文，在步骤间传递"""
-    image: PIL.Image.Image           # 当前图片
-    asset_type: AssetType            # 素材类型
-    style: StyleProfile              # 风格参数
-    api_had_transparent_bg: bool     # API 是否已输出透明背景
-    target_size: tuple[int, int]     # 目标尺寸，如 (16, 16)
-    log: list[PostProcessLog]        # 执行日志
+    image: PIL.Image.Image           # 当前图片（初始为 AI 生成的完整图）
+    extracted_frames: list[PIL.Image.Image]  # 帧提取后的独立帧列表（仅角色动画）
+    asset_type: AssetType
+    style: StyleProfile
+    api_had_transparent_bg: bool
+    target_size: tuple[int, int]
+    sheet_rows: int | None           # Sprite Sheet 行数（仅角色）
+    sheet_cols: int | None           # Sprite Sheet 列数（仅角色）
+    log: list[PostProcessLog]
 
 @dataclass
 class PostProcessLog:
@@ -254,10 +262,20 @@ class PostProcessLog:
     duration_ms: int   # 耗时
 
 class PostProcessPipeline:
-    def __init__(self): ...  # 注册所有步骤
+    def __init__(self): ...
 
     async def run(self, context: PostProcessContext) -> PostProcessContext:
-        """依次执行所有步骤，条件跳过。"""
+        """依次执行所有步骤，条件跳过。角色动画输出 extracted_frames。"""
+```
+
+**帧提取算法要点：**
+
+```
+输入：AI 生成的 Sprite Sheet 图片 + 预期行列数 + 预期帧尺寸
+1. 计算每帧的理论尺寸：total_width / cols, total_height / rows
+2. 如果实际帧尺寸与预期不符（AI 未精确遵循尺寸指令），按实际切割
+3. 逐帧切割，存入 extracted_frames 列表
+4. 对每帧独立执行后续裁切/居中/缩放步骤
 ```
 
 ---
@@ -279,12 +297,12 @@ python/fastapi_app/
 
 ### 依赖
 
-M2-01（Prompt Optimizer）、M2-02（素材生成 Engine）、M2-03（后处理管线）
+M2-01（Prompt Optimizer）、M2-02（素材生成 Engine）、M2-03（后处理管线）、M1-05（文件上传 API）
 
 ### 验收标准
 
-- [ ] `POST /api/v1/generate` 完整流程跑通
-- [ ] `POST /api/v1/generate/preview` 快速预览模式（低成本多候选）
+- [ ] `POST /api/v1/generate` 完整流程跑通（高质量模式）
+- [ ] `POST /api/v1/generate/preview` 快速预览模式
 - [ ] `GET /api/v1/generation/{id}` 查询单条生成记录
 - [ ] `GET /api/v1/generation?project_id=xxx` 按项目查询生成记录列表
 - [ ] `POST /api/v1/generation/{id}/select` 将生成记录选中为资产
@@ -294,31 +312,30 @@ M2-01（Prompt Optimizer）、M2-02（素材生成 Engine）、M2-03（后处理
 **`POST /api/v1/generate`**
 
 ```python
-# 请求体
 class GenerateRequest(BaseModel):
     project_id: str
-    user_prompt: str                          # 用户原始描述
+    user_prompt: str
     asset_type: AssetType                     # character / tile
     style_id: str | None = None               # 不传则用项目默认风格
-    reference_image_path: str | None = None   # 参考图路径
+    reference_image_path: str | None = None   # 参考图路径（通过 M1-05 上传获得）
+    reference_style_description: str | None = None  # 参考图风格描述（M4 提供，V1 可为空）
 
     # 角色专用参数
-    direction_count: int = 4                  # 方向数
-    frame_count: int = 3                      # 每方向帧数
-    target_size: tuple[int, int] = (16, 16)   # 单帧尺寸
+    direction_count: int = 4
+    frame_count: int = 3
+    target_size: tuple[int, int] = (16, 16)
 
     # 生成参数
-    preview_mode: bool = False                # True=低成本多候选
-    transparent_background: bool = True       # 是否请求透明背景
+    preview_mode: bool = False                # True=快速预览
+    transparent_background: bool = True
 
-# 响应体
 class GenerateResponse(BaseModel):
-    records: list[GenerationRecordResponse]   # 生成的候选列表
-    optimized_prompt: str                     # 优化后的 Prompt
+    records: list[GenerationRecordResponse]
+    optimized_prompt: str
 
 class GenerationRecordResponse(BaseModel):
     id: str
-    image_url: str                            # 前端可通过此 URL 获取图片
+    image_url: str                            # /images/{project_id}/raw/{record_id}.png
     user_prompt: str
     optimized_prompt: str
     seed: str | None
@@ -330,17 +347,30 @@ class GenerationRecordResponse(BaseModel):
 **`POST /api/v1/generation/{id}/select`**
 
 ```python
-# 请求体
 class SelectRecordRequest(BaseModel):
-    name: str                  # 资产名称
+    name: str
     tags: list[str] = []
 
-# 响应体
 class SelectRecordResponse(BaseModel):
-    asset: AssetResponse       # 新创建的资产
+    asset: AssetResponse
 ```
 
-**图片获取：** `GET /api/v1/images/{path:path}` — 静态文件服务，返回图片文件。前端通过此 URL 在 `<img>` 标签中展示。
+**完整调用流程：**
+
+```
+1. 前端传入 GenerateRequest
+2. 读取风格档案（style_id 或项目默认）
+3. PromptOptimizer.optimize() → 优化 Prompt
+   - 角色动画：生成 Sprite Sheet 布局 Prompt（指定行列数、帧尺寸）
+   - Tile：生成 Tileset Prompt
+4. ImageGenerator.generate() → 获得原始图片
+5. PostProcessPipeline.run() → 后处理
+   - 角色：帧提取 → 逐帧裁切/居中/缩放 → 输出独立帧列表
+   - Tile：裁切/居中/缩放
+6. 保存处理后的图片到文件系统
+7. 写入 GenerationRecord
+8. 返回候选列表给前端
+```
 
 ---
 
@@ -360,6 +390,7 @@ src/
 │   ├── generate/
 │   │   ├── AssetTypeSelector.tsx   # 素材类型选择器
 │   │   ├── PromptInput.tsx         # 文字描述输入
+│   │   ├── PromptPreview.tsx       # 优化后 Prompt 预览（可展开查看）
 │   │   ├── ParamPanel.tsx          # 动态参数面板
 │   │   ├── ReferenceUpload.tsx     # 参考图上传
 │   │   ├── CandidateGrid.tsx       # 候选结果网格
@@ -371,7 +402,7 @@ src/
 
 ### 依赖
 
-M1-05（React 项目初始化）、M2-04（生成 API）
+M1-06（React 项目初始化）、M2-04（生成 API）
 
 ### 验收标准
 
@@ -380,21 +411,19 @@ M1-05（React 项目初始化）、M2-04（生成 API）
 - [ ] 参数面板根据素材类型动态切换：
   - 角色模式：风格选择、尺寸、视角、帧数、方向数
   - Tile 模式：风格选择、尺寸、边缘规则
-- [ ] 参考图上传区（拖拽 + 点击），上传后显示预览
+- [ ] 参考图上传区（拖拽 + 点击），调用 M1-05 上传 API，上传后显示预览
 - [ ] "快速预览" 和 "高质量生成" 两个按钮
 - [ ] 生成中显示加载状态（进度指示，请求期间 disable 按钮）
+- [ ] 生成完成后，显示优化后的 Prompt 预览（可折叠/展开）
 - [ ] 候选结果以网格展示，棋盘格底图
-- [ ] 点击候选图放大查看
+- [ ] 点击候选图放大查看（Sprite Sheet 整图预览）
 - [ ] 每个候选可操作：加入资产库 / 重试 / 生成变体
 - [ ] 加入资产库时弹出命名对话框
 - [ ] 空状态有引导文案
 
 ### 接口约定
 
-**组件 Props 参考：**
-
 ```typescript
-// ParamPanel 接收素材类型，切换表单字段
 interface ParamPanelProps {
   assetType: AssetType;
   onParamsChange: (params: GenerateParams) => void;
@@ -406,16 +435,16 @@ interface GenerateParams {
   target_size: [number, number];
   direction_count?: number;    // 角色
   frame_count?: number;        // 角色
-  reference_image?: File;
+  reference_image_path?: string;
 }
 
-// CandidateGrid 展示生成结果
 interface CandidateGridProps {
   records: GenerationRecord[];
+  optimizedPrompt: string;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onAddToLibrary: (id: string, name: string, tags: string[]) => void;
-  onRetry: (id: string) => void;
+  onRetry: () => void;
   onVariant: (id: string) => void;
 }
 ```
@@ -424,9 +453,9 @@ interface CandidateGridProps {
 
 ```
 1. 用户填写参数 + 描述 → 点击生成
-2. POST /api/v1/generate（或 /generate/preview）
-   - 如有参考图：先 POST /api/v1/upload/reference 上传图片，获取路径，再调用生成
-3. 轮询或等待返回结果
-4. 渲染 CandidateGrid
-5. 用户选中一个 → POST /api/v1/generation/{id}/select
+2. 如有参考图：先 POST /api/v1/upload（purpose=reference）→ 获取 path
+3. POST /api/v1/generate（或 /generate/preview）
+4. 等待返回结果
+5. 渲染 PromptPreview + CandidateGrid
+6. 用户选中一个 → POST /api/v1/generation/{id}/select
 ```
