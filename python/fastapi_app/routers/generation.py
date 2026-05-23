@@ -175,13 +175,14 @@ async def _run_generation(
             {"step": log.step, "executed": log.executed, "params": log.params, "duration_ms": log.duration_ms}
             for log in ctx.log
         ]
+        current_record = await generation_crud.get(session, stored.record_id)
         await generation_crud.update(
             session,
             stored.record_id,
             {
                 "postprocess_log": pp_log_dicts,
                 "api_params": {
-                    **(stored.image.metadata or {}),
+                    **(current_record.api_params or {}),
                     "processed_image_path": processed_path,
                 },
             },
