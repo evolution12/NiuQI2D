@@ -97,7 +97,8 @@ python/
 │       ├── styles.py         # 风格管理路由（M4 实现）
 │       ├── generation.py     # 素材生成路由（M2 实现）
 │       ├── assets.py         # 资产管理路由（M3 实现）
-│       └── export.py         # 导出路由（M3 实现）
+│       ├── export.py         # 导出路由（M3 实现）
+│       └── settings.py       # 设置路由（M5 实现）
 ├── requirements.txt          # Python 依赖
 └── pyproject.toml
 ```
@@ -244,6 +245,10 @@ class ExportFormat(str, Enum):
     PNG_SINGLE = "png_single"
     SPRITESHEET_PNG_JSON = "spritesheet_png_json"
     TILESET_PNG_JSON = "tileset_png_json"
+
+class AssetSubtype(str, Enum):
+    STATIC_IMAGE = "static_image"               # 角色静态单图
+    ANIMATED_SPRITESHEET = "animated_spritesheet"  # 角色动画 Sprite Sheet
 ```
 
 **数据库初始化策略：** 应用启动时检查 `db_path` 是否存在，不存在则创建全部表。V1 直接 `create_all()`，不使用 Alembic。后续 V2 需引入 Alembic 做数据库迁移。
@@ -289,6 +294,11 @@ M1-02（FastAPI 服务初始化）
 │   │   │   └── {record_id}.png
 │   │   ├── processed/                    # 后处理后的图片
 │   │   │   └── {asset_id}.png
+│   │   ├── frames/                       # 帧提取后的独立帧（仅 animated_spritesheet）
+│   │   │   └── {record_id}/
+│   │   │       ├── frame_000.png
+│   │   │       ├── frame_001.png
+│   │   │       └── ...
 │   │   └── thumbnails/                   # 缩略图
 │   │       └── {asset_id}_thumb.png
 │   └── references/                       # 参考图
@@ -499,7 +509,8 @@ interface StyleProfile { id: string; name: string; art_style: ArtStyle; color_pa
 interface Asset { id: string; project_id: string; name: string; asset_type: AssetType; status: AssetStatus; source_path: string; thumbnail_path: string; tags: string[]; created_at: string; updated_at: string; }
 
 /** 对齐 schemas.py -> GenerationRecordResponse */
-interface GenerationRecord { id: string; asset_id: string | null; user_prompt: string; optimized_prompt: string; style_id: string; asset_type: AssetType; api_provider: string; api_model: string; api_params: Record<string, unknown>; seed: string | null; reference_image_path: string | null; postprocess_log: PostProcessLogEntry[]; cost_estimate: number; created_at: string; }
+interface GenerationRecord { id: string; asset_id: string | null; user_prompt: string; optimized_prompt: string; style_id: string; asset_type: AssetType; asset_subtype: AssetSubtype | null; api_provider: string; api_model: string; api_params: Record<string, unknown>; seed: string | null; reference_image_path: string | null; postprocess_log: PostProcessLog[]; created_at: string; }
+interface GenerationRecordResponse { id: string; image_url: string; user_prompt: string; optimized_prompt: string; seed: string | null; postprocess_log: PostProcessLog[]; created_at: string; }
 
 /** 对齐 schemas.py -> ExportRecordResponse */
 interface ExportRecord { id: string; asset_ids: string[]; export_format: ExportFormat; export_path: string; metadata: Record<string, unknown>; file_size: number; created_at: string; }
@@ -508,11 +519,12 @@ interface ExportRecord { id: string; asset_ids: string[]; export_format: ExportF
 type ArtStyle = "pixel" | "hand_drawn" | "cartoon" | "realistic" | "custom";
 type Perspective = "top_down" | "side_scroller" | "isometric";
 type AssetType = "character" | "tile" | "prop" | "ui" | "effect";
+type AssetSubtype = "static_image" | "animated_spritesheet";
 type AssetStatus = "draft" | "selected" | "exported" | "discarded";
 type ExportFormat = "png_single" | "spritesheet_png_json" | "tileset_png_json";
 
-/** 对齐 schemas.py -> PostProcessLogEntry */
-interface PostProcessLogEntry {
+/** 对齐 schemas.py -> PostProcessLog */
+interface PostProcessLog {
   step: string;
   executed: boolean;
   params: Record<string, unknown>;

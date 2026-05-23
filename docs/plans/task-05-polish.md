@@ -77,54 +77,7 @@ class ApiTestResponse(BaseModel):
 
 ---
 
-## M5-02 | BE | 成本统计
-
-### 职责
-
-实现 API 调用成本统计接口，聚合 GenerationRecord 中的 cost_estimate。
-
-### 涉及文件
-
-```
-python/fastapi_app/
-├── routers/
-│   └── settings.py              # 补充成本统计路由
-├── services/
-│   └── cost_service.py          # 成本计算与聚合
-```
-
-### 依赖
-
-M1-03（数据库，读取 GenerationRecord）
-
-### 验收标准
-
-- [ ] `GET /api/v1/settings/costs` 返回成本统计
-- [ ] 支持按时间范围筛选（今日、本周、本月、全部）
-- [ ] 支持按项目筛选
-- [ ] 返回：总调用次数、总成本、图片 API 成本、文字 API 成本、日均成本
-
-### 接口约定
-
-```python
-class CostStatsResponse(BaseModel):
-    period: str                        # "today" / "week" / "month" / "all"
-    total_calls: int
-    total_cost_usd: float
-    image_api_cost: float
-    text_api_cost: float
-    avg_daily_cost: float
-    by_date: list[DailyCost]
-
-class DailyCost(BaseModel):
-    date: str                          # "2026-05-23"
-    calls: int
-    cost: float
-```
-
----
-
-## M5-03 | BE | 异常处理规范化
+## M5-02 | BE | 异常处理规范化
 
 ### 职责
 
@@ -167,7 +120,7 @@ class NiuQIError(Exception):
 
 class ApiKeyInvalidError(NiuQIError): ...      # 401
 class ApiCallFailedError(NiuQIError): ...      # 502
-class TimeoutError(NiuQIError): ...            # 408
+class GenerationTimeoutError(NiuQIError): ...  # 408
 class ResourceNotFoundError(NiuQIError): ...   # 404
 class InvalidParamError(NiuQIError): ...       # 400
 class StorageFullError(NiuQIError): ...        # 507
@@ -175,7 +128,7 @@ class StorageFullError(NiuQIError): ...        # 507
 
 ---
 
-## M5-04 | FE | 设置页 UI
+## M5-03 | FE | 设置页 UI
 
 ### 职责
 
@@ -192,13 +145,12 @@ src/
 │   │   ├── ApiConfigSection.tsx  # API 配置区
 │   │   ├── ModelSelector.tsx     # 生成模式模型选择（预览/高质量分别配置）
 │   │   ├── DefaultParams.tsx     # 默认参数区
-│   │   ├── StorageManager.tsx    # 存储管理区
-│   │   └── CostStats.tsx         # 成本统计展示
+│   │   └── StorageManager.tsx    # 存储管理区
 ```
 
 ### 依赖
 
-M1-06（React 项目）、M5-01（设置 API）、M5-02（成本统计）
+M1-06（React 项目）、M5-01（设置 API）
 
 ### 验收标准
 
@@ -215,10 +167,6 @@ M1-06（React 项目）、M5-01（设置 API）、M5-02（成本统计）
   - 数据目录路径展示 + "打开目录"按钮
   - 占用空间显示
   - "清理缓存"按钮（确认弹窗）
-- [ ] 成本统计区：
-  - 时间范围切换（今日/本周/本月/全部）
-  - 总调用次数、总成本、日均成本
-  - 按天成本图表
 - [ ] 所有保存操作有成功/失败提示（Toast）
 
 ### 接口约定
@@ -226,7 +174,6 @@ M1-06（React 项目）、M5-01（设置 API）、M5-02（成本统计）
 ```typescript
 interface SettingsPageState {
   settings: SettingsResponse;
-  costStats: CostStatsResponse | null;
   isTestingImage: boolean;
   isTestingText: boolean;
 }
@@ -234,7 +181,7 @@ interface SettingsPageState {
 
 ---
 
-## M5-05 | FE | 快捷键与全局交互优化
+## M5-04 | FE | 快捷键与全局交互优化
 
 ### 职责
 
@@ -279,7 +226,7 @@ toast.warning("API Key 未配置");
 
 ---
 
-## M5-06 | EL | Electron 打包与安装包
+## M5-05 | EL | Electron 打包与安装包
 
 ### 职责
 
@@ -357,7 +304,7 @@ async function checkForUpdates(): Promise<void> {
 
 ---
 
-## M5-07 | FE + BE | 全流程集成测试
+## M5-06 | FE + BE | 全流程集成测试
 
 ### 职责
 

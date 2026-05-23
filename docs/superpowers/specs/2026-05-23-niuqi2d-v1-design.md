@@ -232,7 +232,6 @@ SQLite 存储，5 个核心实体：
 | seed | TEXT (可选) | 可复现种子 |
 | reference_image_path | TEXT (可选) | |
 | postprocess_log | JSON | 记录执行了哪些后处理步骤 |
-| cost_estimate | FLOAT | 预估调用成本 |
 | created_at | DATETIME | |
 
 ### 4.5 ExportRecord（导出记录）
@@ -518,7 +517,6 @@ V1 输出通用格式（PNG + JSON），确保 Unity/Godot/Cocos 都能导入。
 ### Milestone 5: 产品化
 
 - API Key 配置 + 连接测试
-- 成本统计（调用次数、预估费用）
 - 导出历史
 - 快捷键
 - 异常处理和错误提示优化

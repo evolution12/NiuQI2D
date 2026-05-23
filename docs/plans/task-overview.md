@@ -9,7 +9,7 @@
 | [task-02-generation-core.md](task-02-generation-core.md) | M2：Prompt 优化器、素材生成 Engine、图像后处理管线、生成页 UI |
 | [task-03-export-asset-lib.md](task-03-export-asset-lib.md) | M3：Sprite Sheet 拼接、导出打包、资产库页、导出页 UI |
 | [task-04-style-project.md](task-04-style-project.md) | M4：风格管理、项目管理、复现/变体生成、侧边栏 |
-| [task-05-polish.md](task-05-polish.md) | M5：设置页、成本统计、异常处理、快捷键、打包发布 |
+| [task-05-polish.md](task-05-polish.md) | M5：设置页、异常处理、快捷键、打包发布 |
 
 ## 角色分工
 
@@ -47,7 +47,7 @@ M2 生成闭环（BE 先行，FE 跟进）
 M3 导出与资产库（BE + FE 并行）
  │
  ├─ BE: Sprite Sheet 拼接 + JSON 生成
- ├─ BE: 导出 API（含资产状态更新）
+ ├─ BE: 导出 API（含资产状态更新 + 标签列表查询）
  ├─ FE: 资产库页 UI
  └─ FE: 导出页 UI
  │
@@ -62,8 +62,8 @@ M4 风格与项目管理（BE + FE 并行）
  ▼
 M5 产品化（全角色）
  │
- ├─ FE: 设置页 + 成本统计
- ├─ BE: 异常处理规范化 + API Key 存储（keyring）
+ ├─ FE: 设置页
+ ├─ BE: 异常处理规范化 + API Key 存储（本地 JSON）
  └─ EL: 打包配置 + 安装包（无自动更新，手动版本检查）
 ```
 
