@@ -14,11 +14,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
-from .database import close_db, init_db
+from .database import close_db, get_session_factory, init_db
 from .exceptions import NiuQIError
 from .routers import assets, export, generation, health, projects, settings as settings_router, styles, upload
 from .schemas import ErrorDetail, ErrorResponse
 from .storage import StorageManager
+from .services.style_service import StyleService
 
 
 def configure_logging() -> None:
@@ -54,6 +55,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await storage.initialize()
     app.state.storage = storage
     await init_db()
+    async with get_session_factory()() as session:
+        await StyleService(session).ensure_presets()
     yield
     await close_db()
 
