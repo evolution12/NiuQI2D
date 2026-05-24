@@ -149,6 +149,7 @@ class PromptOptimizer:
     _BASE_URLS: dict[str, str] = {
         "openai": "https://api.openai.com/v1",
         "deepseek": "https://api.deepseek.com",
+        "doubao": "https://ark.cn-beijing.volces.com/api/v3",
     }
 
     async def _optimize_with_provider(self, template_prompt: str) -> str:

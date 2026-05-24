@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from ..schemas import ApiTestResponse, SettingsResponse, UpdateSettingsRequest
+from ..schemas import ApiTestResponse, SettingsResponse, TestImageApiRequest, TestTextApiRequest, UpdateSettingsRequest
 from ..services.config_service import ConfigService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -23,10 +23,10 @@ async def update_app_settings(body: UpdateSettingsRequest) -> SettingsResponse:
 
 
 @router.post("/test-image-api", response_model=ApiTestResponse)
-async def test_image_api() -> ApiTestResponse:
-    return await ConfigService().test_image_api()
+async def test_image_api(body: TestImageApiRequest | None = None) -> ApiTestResponse:
+    return await ConfigService().test_image_api(body)
 
 
 @router.post("/test-text-api", response_model=ApiTestResponse)
-async def test_text_api() -> ApiTestResponse:
-    return await ConfigService().test_text_api()
+async def test_text_api(body: TestTextApiRequest | None = None) -> ApiTestResponse:
+    return await ConfigService().test_text_api(body)

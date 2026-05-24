@@ -91,6 +91,7 @@ export function SettingsPage() {
         provider={pending.text_api_provider ?? settings.text_api_provider}
         keySet={settings.text_api_key_set || !!pending.text_api_key}
         model={pending.text_api_model ?? settings.text_api_model}
+        showDoubao
         showDeepSeek
         onProviderChange={(v) => setPending((p) => ({ ...p, text_api_provider: v }))}
         onKeyChange={(v) => setPending((p) => ({ ...p, text_api_key: v }))}
