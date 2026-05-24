@@ -346,7 +346,7 @@ class GenerationService:
                 sheet_cols=sheet_cols,
             )
         )
-        preview_frames = preview_context.extracted_frames or [preview_context.image]
+        preview_frames = self._prepare_preview_frames(preview_context.extracted_frames or [preview_context.image])
 
         frames = context.extracted_frames or [context.image]
         preview_paths: list[str] = []
@@ -478,6 +478,49 @@ class GenerationService:
                 (864, 1152),
             ]
         return min(candidates, key=lambda size: abs((size[0] / size[1]) - aspect))
+
+    def _prepare_preview_frames(self, frames: list[Image.Image]) -> list[Image.Image]:
+        return [self._prepare_preview_frame(frame) for frame in frames]
+
+    def _prepare_preview_frame(self, frame: Image.Image) -> Image.Image:
+        rgba = frame.convert("RGBA")
+        alpha = rgba.getchannel("A")
+        bbox = alpha.getbbox()
+        if bbox is None:
+            bbox = self._content_bbox_from_light_background(rgba)
+        if bbox is None:
+            return rgba
+
+        cropped = rgba.crop(bbox)
+        side = max(cropped.width, cropped.height)
+        padding = max(8, round(side * 0.08))
+        canvas_side = side + padding * 2
+        canvas = Image.new("RGBA", (canvas_side, canvas_side), (0, 0, 0, 0))
+        offset = ((canvas_side - cropped.width) // 2, (canvas_side - cropped.height) // 2)
+        canvas.paste(cropped, offset, cropped)
+        return canvas
+
+    def _content_bbox_from_light_background(self, image: Image.Image) -> tuple[int, int, int, int] | None:
+        pixels = image.convert("RGBA").load()
+        width, height = image.size
+        min_x, min_y = width, height
+        max_x, max_y = -1, -1
+        for y in range(height):
+            for x in range(width):
+                red, green, blue, alpha = pixels[x, y]
+                if alpha <= 8:
+                    continue
+                if red >= 238 and green >= 238 and blue >= 238:
+                    continue
+                if abs(red - green) <= 4 and abs(green - blue) <= 4 and red >= 210:
+                    continue
+                min_x = min(min_x, x)
+                min_y = min(min_y, y)
+                max_x = max(max_x, x)
+                max_y = max(max_y, y)
+        if max_x < min_x or max_y < min_y:
+            return None
+        return (min_x, min_y, max_x + 1, max_y + 1)
 
     def _png_bytes(self, image: Image.Image) -> bytes:
         output = BytesIO()
