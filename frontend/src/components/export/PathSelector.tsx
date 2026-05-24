@@ -1,3 +1,5 @@
+import { api } from '../../services/api';
+
 interface PathSelectorProps {
   value: string;
   onChange: (path: string) => void;
@@ -5,14 +7,26 @@ interface PathSelectorProps {
 
 export function PathSelector({ value, onChange }: PathSelectorProps) {
   const handleSelect = async () => {
+    // Try Electron native dialog first
     const electronAPI = (window as any).electronAPI;
     if (electronAPI?.fs?.selectDirectory) {
       const path = await electronAPI.fs.selectDirectory();
       if (path) onChange(path);
-    } else {
-      // fallback：手动输入
-      const path = prompt('输入导出路径：', value);
-      if (path) onChange(path);
+      return;
+    }
+
+    // Use Python backend for native OS directory picker
+    try {
+      const res = await api.post<{ path: string | null }>('/utils/select-directory');
+      if (res.path) onChange(res.path);
+    } catch {
+      // Fallback to browser File System Access API
+      try {
+        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        onChange(dirHandle.name);
+      } catch {
+        // User cancelled
+      }
     }
   };
 
@@ -24,7 +38,7 @@ export function PathSelector({ value, onChange }: PathSelectorProps) {
           className="nq-input"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="选择或输入导出目录路径"
+          placeholder="例如: C:\exports 或 /home/user/exports"
           style={{ flex: 1 }}
         />
         <button className="nq-btn" onClick={handleSelect}>

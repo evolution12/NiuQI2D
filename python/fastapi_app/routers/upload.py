@@ -39,8 +39,6 @@ async def upload_file(
     storage = request.app.state.storage
     filename = f"{uuid.uuid4()}.{_normalize_extension(suffix)}"
     if purpose == "reference":
-        if style_id is None:
-            raise InvalidParamError("purpose=reference 时必须提供 style_id")
         relative_path = f"references/{filename}"
     elif purpose == "raw_image":
         if project_id is None:
