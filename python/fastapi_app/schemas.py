@@ -333,3 +333,27 @@ class AnimationResponse(BaseModel):
     frames: list[str]
     frame_count: int
     frame_delay_ms: int = 100
+
+
+class ExportRequest(BaseModel):
+    asset_ids: list[str]
+    export_format: ExportFormat
+    export_path: str
+    sheet_layout: str = "by_action"
+    sheet_padding: int = 0
+    sheet_margin: int = 0
+    tileset_columns: int = 8
+    tileset_spacing: int = 0
+    tileset_margin: int = 0
+
+
+class ExportFileInfo(BaseModel):
+    filename: str
+    path: str
+    size: int
+
+
+class ExportResponse(BaseModel):
+    export_id: str
+    files: list[ExportFileInfo]
+    total_size: int

@@ -6,6 +6,12 @@ interface ExportConfigFormProps {
   onChange: (config: Record<string, number | string>) => void;
 }
 
+const hintStyle: React.CSSProperties = {
+  color: 'var(--text-3)',
+  fontSize: '11px',
+  marginTop: '2px',
+};
+
 export function ExportConfigForm({ format, config, onChange }: ExportConfigFormProps) {
   const update = (key: string, value: number | string) =>
     onChange({ ...config, [key]: value });
@@ -13,7 +19,7 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
   if (format === 'png_single') {
     return (
       <div style={{ color: 'var(--text-3)', fontSize: '13px' }}>
-        单图模式无需额外配置
+        每个素材导出为独立的 PNG 文件，无需额外配置
       </div>
     );
   }
@@ -33,6 +39,7 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
             <option value="by_direction">按方向分行</option>
             <option value="linear">线性排列</option>
           </select>
+          <div style={hintStyle}>每行对应一个动作或方向，列对应帧序列</div>
         </div>
         <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
           <div className="form-row" style={{ flex: 1 }}>
@@ -45,6 +52,7 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
               onChange={(e) => update('padding', Number(e.target.value))}
               style={{ width: '100%' }}
             />
+            <div style={hintStyle}>相邻帧之间的像素间隔，0 为无间距</div>
           </div>
           <div className="form-row" style={{ flex: 1 }}>
             <label className="form-label">画布补边</label>
@@ -56,6 +64,7 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
               onChange={(e) => update('margin', Number(e.target.value))}
               style={{ width: '100%' }}
             />
+            <div style={hintStyle}>整张 Sprite Sheet 四周的留白像素</div>
           </div>
         </div>
       </div>
@@ -76,6 +85,7 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
               onChange={(e) => update('columns', Number(e.target.value))}
               style={{ width: '100%' }}
             />
+            <div style={hintStyle}>每行排列的 Tile 数量</div>
           </div>
           <div className="form-row" style={{ flex: 1 }}>
             <label className="form-label">Tile 间距</label>
@@ -87,6 +97,7 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
               onChange={(e) => update('spacing', Number(e.target.value))}
               style={{ width: '100%' }}
             />
+            <div style={hintStyle}>相邻 Tile 之间的像素间隔</div>
           </div>
           <div className="form-row" style={{ flex: 1 }}>
             <label className="form-label">画布 Margin</label>
@@ -98,6 +109,7 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
               onChange={(e) => update('margin', Number(e.target.value))}
               style={{ width: '100%' }}
             />
+            <div style={hintStyle}>Tileset 整体四周的留白像素</div>
           </div>
         </div>
       </div>
