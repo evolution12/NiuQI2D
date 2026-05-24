@@ -20,6 +20,9 @@ class StyleService:
     async def ensure_presets(self) -> None:
         preset_path = Path(__file__).resolve().parent.parent / "data" / "preset_styles.json"
         presets = json.loads(preset_path.read_text(encoding="utf-8"))
+        preset_names = {p["name"] for p in presets}
+
+        # Create or update current presets
         for preset in presets:
             result = await self.session.execute(
                 select(StyleProfile).where(
@@ -27,7 +30,13 @@ class StyleService:
                     StyleProfile.is_preset.is_(True),
                 )
             )
-            if result.scalar_one_or_none() is not None:
+            existing = result.scalar_one_or_none()
+            if existing is not None:
+                # Update existing preset in case it changed
+                data = StyleProfileCreateRequest(**preset).model_dump(mode="json")
+                for key, value in data.items():
+                    setattr(existing, key, value)
+                await self.session.commit()
                 continue
             await self.style_crud.create(
                 self.session,
@@ -36,6 +45,25 @@ class StyleService:
                     "is_preset": True,
                 },
             )
+
+        # Remove old presets no longer in the list (only if unreferenced)
+        result = await self.session.execute(
+            select(StyleProfile).where(
+                StyleProfile.is_preset.is_(True),
+                StyleProfile.name.notin_(preset_names),
+            )
+        )
+        for old in result.scalars().all():
+            # Check if referenced by any project or generation record
+            proj = await self.session.execute(
+                select(Project).where(Project.style_id == old.id).limit(1)
+            )
+            gen = await self.session.execute(
+                select(GenerationRecord).where(GenerationRecord.style_id == old.id).limit(1)
+            )
+            if proj.scalar_one_or_none() is None and gen.scalar_one_or_none() is None:
+                await self.session.delete(old)
+        await self.session.commit()
 
     async def ensure_deletable(self, style: StyleProfile) -> None:
         if style.is_preset:

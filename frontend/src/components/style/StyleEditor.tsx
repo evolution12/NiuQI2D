@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ArtStyle, Perspective, CreateStyleRequest } from '../../types';
 
 interface StyleEditorProps {
-  initial?: CreateStyleRequest & { id?: string };
+  initial?: CreateStyleRequest & { id?: string; extra_params?: Record<string, unknown> | null };
   onSave: (data: CreateStyleRequest) => void;
   onCancel: () => void;
 }
@@ -24,17 +24,25 @@ const perspectiveOptions: { value: Perspective; label: string }[] = [
 export function StyleEditor({ initial, onSave, onCancel }: StyleEditorProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [artStyle, setArtStyle] = useState<ArtStyle>(initial?.art_style ?? 'pixel');
-  const [width, setWidth] = useState(initial?.default_size.w ?? 16);
-  const [height, setHeight] = useState(initial?.default_size.h ?? 16);
+  const [width, setWidth] = useState(initial?.default_size?.w ?? 64);
+  const [height, setHeight] = useState(initial?.default_size?.h ?? 64);
   const [perspective, setPerspective] = useState<Perspective>(
     initial?.perspective ?? 'top_down',
   );
   const [colorPalette, setColorPalette] = useState(
     initial?.color_palette?.join(', ') ?? '',
   );
+  const [extraParams, setExtraParams] = useState(
+    initial?.extra_params ? JSON.stringify(initial.extra_params, null, 2) : '',
+  );
 
   const handleSave = () => {
     if (!name.trim()) return;
+    const parsedParams: Record<string, unknown> | null = (() => {
+      if (!extraParams.trim()) return null;
+      try { return JSON.parse(extraParams); }
+      catch { return null; }
+    })();
     onSave({
       name: name.trim(),
       art_style: artStyle,
@@ -43,6 +51,7 @@ export function StyleEditor({ initial, onSave, onCancel }: StyleEditorProps) {
       color_palette: colorPalette
         ? colorPalette.split(',').map((c) => c.trim()).filter(Boolean)
         : null,
+      extra_params: parsedParams,
     });
   };
 
@@ -80,29 +89,6 @@ export function StyleEditor({ initial, onSave, onCancel }: StyleEditorProps) {
           </select>
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-          <div className="form-row" style={{ flex: 1 }}>
-            <label className="form-label">宽度 (px)</label>
-            <input
-              className="nq-input"
-              type="number"
-              value={width}
-              onChange={(e) => setWidth(Number(e.target.value))}
-              style={{ width: '100%' }}
-            />
-          </div>
-          <div className="form-row" style={{ flex: 1 }}>
-            <label className="form-label">高度 (px)</label>
-            <input
-              className="nq-input"
-              type="number"
-              value={height}
-              onChange={(e) => setHeight(Number(e.target.value))}
-              style={{ width: '100%' }}
-            />
-          </div>
-        </div>
-
         <div className="form-row">
           <label className="form-label">视角</label>
           <select
@@ -125,6 +111,18 @@ export function StyleEditor({ initial, onSave, onCancel }: StyleEditorProps) {
             onChange={(e) => setColorPalette(e.target.value)}
             placeholder="#2d1b00, #4a8c3f, ..."
             style={{ width: '100%' }}
+          />
+        </div>
+
+        <div className="form-row">
+          <label className="form-label">额外参数（JSON，可选）</label>
+          <textarea
+            className="nq-input"
+            value={extraParams}
+            onChange={(e) => setExtraParams(e.target.value)}
+            placeholder='{"color_count": 16, "outline": true}'
+            style={{ width: '100%', minHeight: '80px', resize: 'vertical' }}
+            spellCheck={false}
           />
         </div>
       </div>

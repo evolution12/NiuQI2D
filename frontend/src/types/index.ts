@@ -55,6 +55,7 @@ export interface StyleProfile {
   default_size: { w: number; h: number };
   perspective: Perspective;
   extra_params: Record<string, unknown> | null;
+  is_preset: boolean;
   created_at: string;
   updated_at: string;
 }
