@@ -75,6 +75,7 @@ class GenerationService:
             mode=mode,
             candidate_count=body.candidate_count,
             transparent_background=body.transparent_background,
+            provider_size=self._provider_size_for_request(body),
             seed=body.seed,
             reference_image_path=body.reference_image_path,
         )
@@ -178,6 +179,7 @@ class GenerationService:
             mode=mode,
             candidate_count=1,
             transparent_background=bool(record.api_params.get("transparent_background", True)),
+            provider_size=self._provider_size_from_record(record),
             seed=record.seed,
             reference_image_path=record.reference_image_path,
         )
@@ -230,6 +232,7 @@ class GenerationService:
             mode=mode,
             candidate_count=body.candidate_count or 1,
             transparent_background=bool(record.api_params.get("transparent_background", True)),
+            provider_size=self._provider_size_from_record(record),
             seed=body.seed_override,
             reference_image_path=body.reference_image_path or record.reference_image_path,
         )
@@ -413,6 +416,44 @@ class GenerationService:
             if action_indexes:
                 mapping[f"{action}_all"] = action_indexes
         return mapping
+
+    def _provider_size_for_request(self, body: GenerateRequest) -> tuple[int, int]:
+        if body.asset_subtype != AssetSubtype.ANIMATED_SPRITESHEET:
+            return (1024, 1024)
+        actions = body.actions or ["idle"]
+        rows = max(1, body.direction_count * len(actions))
+        cols = max(1, body.frame_count)
+        return self._provider_size_for_grid(cols, rows)
+
+    def _provider_size_from_record(self, record: GenerationRecord) -> tuple[int, int]:
+        if record.asset_subtype != AssetSubtype.ANIMATED_SPRITESHEET:
+            return (1024, 1024)
+        cols = int(record.api_params.get("sheet_cols", record.api_params.get("frame_count", 3)))
+        rows = int(record.api_params.get("sheet_rows", 4))
+        return self._provider_size_for_grid(max(cols, 1), max(rows, 1))
+
+    def _provider_size_for_grid(self, cols: int, rows: int) -> tuple[int, int]:
+        provider = self.settings.image_api_provider
+        aspect = cols / rows
+        if provider == "openai":
+            candidates = [(1024, 1024), (1536, 1024), (1024, 1536)]
+        elif provider == "doubao":
+            candidates = [
+                (2048, 2048),
+                (1920, 1080),
+                (1080, 1920),
+                (2048, 1152),
+                (1152, 2048),
+            ]
+        else:
+            candidates = [
+                (1024, 1024),
+                (1024, 768),
+                (768, 1024),
+                (1152, 864),
+                (864, 1152),
+            ]
+        return min(candidates, key=lambda size: abs((size[0] / size[1]) - aspect))
 
     def _png_bytes(self, image: Image.Image) -> bytes:
         output = BytesIO()

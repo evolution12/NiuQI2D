@@ -58,8 +58,9 @@ class ResizeStep(PostProcessStep):
         if iw == tw and ih == th:
             return rgba
 
-        # 等比缩放：取较大的缩放比，保证图片完全包含在 target_size 内
-        scale = min(tw / iw, th / ih)
+        padding = 0.9
+        # 等比缩放并保留少量边距，避免角色贴边后看起来缺身体部位。
+        scale = min((tw * padding) / iw, (th * padding) / ih)
         new_w = max(1, round(iw * scale))
         new_h = max(1, round(ih * scale))
 
