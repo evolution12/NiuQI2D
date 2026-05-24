@@ -2,6 +2,7 @@ from __future__ import annotations
 
 CHARACTER_SPRITESHEET_TEMPLATE = """
 {style_keywords} sprite sheet of {user_description},
+preserve the user's subject exactly, do not invent extra character identity, job, weapon, props, story, or scene,
 {perspective} view, actions in row groups: {actions},
 for each action, create {direction_count} rows (one per direction: {directions}),
 {frame_count} columns per row ({frame_count} animation frames for that action and direction),
@@ -16,14 +17,17 @@ do not touch the cell edges,
 no camera-window effect, no sliding mask, no overlapping cells,
 clean grid layout, uniform cell size, clean outlines,
 transparent or plain empty background in each cell, no background scene elements,
+single subject per cell, no text, no logo, no UI, no decorative effects unless the user asked for them,
 game asset style,
 {extra_style_keywords}
 """.strip()
 
 CHARACTER_STATIC_TEMPLATE = """
 {style_keywords} character sprite of {user_description},
+preserve the user's subject exactly, do not invent extra character identity, job, weapon, props, story, or scene,
 {perspective} view, centered composition, clean outlines,
 {cell_width}px x {cell_height}px, game asset style,
-no background elements, single pose,
+no background elements, single pose, single subject, no text, no logo, no UI,
+no decorative effects, extra props, complex clothing, or environment details unless the user asked for them,
 {extra_style_keywords}
 """.strip()

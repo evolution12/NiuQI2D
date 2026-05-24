@@ -9,6 +9,7 @@ PYTHON_DIR = Path(__file__).resolve().parents[2] / "python"
 if str(PYTHON_DIR) not in sys.path:
     sys.path.insert(0, str(PYTHON_DIR))
 
+from fastapi_app.models import AssetSubtype, AssetType
 from fastapi_app.services.prompt_optimizer import PromptOptimizer, SYSTEM_PROMPT
 
 
@@ -46,12 +47,48 @@ class PromptOptimizerTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, "中文优化提示词")
         self.assertIn("仅输出中文", SYSTEM_PROMPT)
+        self.assertIn("最小扩展策略", SYSTEM_PROMPT)
+        self.assertIn("不要主动添加", SYSTEM_PROMPT)
         self.assertNotIn("Output English only", SYSTEM_PROMPT)
 
         payload = _FakeAsyncClient.payload
         self.assertIsNotNone(payload)
         messages = payload["messages"]  # type: ignore[index]
         self.assertEqual(messages[0]["content"], SYSTEM_PROMPT)  # type: ignore[index]
+        self.assertEqual(payload["temperature"], 0.15)  # type: ignore[index]
+
+    def test_template_prompts_include_control_constraints(self) -> None:
+        optimizer = PromptOptimizer(api_provider="openai", api_key="test-key", api_model="test-model")
+
+        character_prompt, character_template = optimizer._build_template_prompt(
+            user_prompt="蓝色史莱姆",
+            asset_type=AssetType.CHARACTER,
+            asset_subtype=AssetSubtype.STATIC_IMAGE,
+            style=None,
+            reference_style_description=None,
+            actions=None,
+            direction_count=4,
+            frame_count=3,
+        )
+        self.assertEqual(character_template, "character_static")
+        self.assertIn("蓝色史莱姆", character_prompt)
+        self.assertIn("do not invent extra character identity", character_prompt)
+        self.assertIn("single subject", character_prompt)
+
+        tile_prompt, tile_template = optimizer._build_template_prompt(
+            user_prompt="草地",
+            asset_type=AssetType.TILE,
+            asset_subtype=None,
+            style=None,
+            reference_style_description=None,
+            actions=None,
+            direction_count=4,
+            frame_count=3,
+        )
+        self.assertEqual(tile_template, "tile")
+        self.assertIn("草地", tile_prompt)
+        self.assertIn("do not invent extra objects", tile_prompt)
+        self.assertIn("tileable surface only", tile_prompt)
 
 
 if __name__ == "__main__":
