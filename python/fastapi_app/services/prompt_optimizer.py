@@ -9,6 +9,7 @@ import httpx
 from ..exceptions import ApiCallFailedError, ApiKeyInvalidError, GenerationTimeoutError, InvalidParamError
 from ..models import ArtStyle, AssetSubtype, AssetType, Perspective, StyleProfile
 from ..templates.character_prompt import CHARACTER_SPRITESHEET_TEMPLATE, CHARACTER_STATIC_TEMPLATE
+from ..templates.map_prompt import MAP_TEMPLATE
 from ..templates.tile_prompt import TILE_TEMPLATE
 
 PROMPT_OPTIMIZER_TIMEOUT_SECONDS = 30.0
@@ -145,7 +146,19 @@ class PromptOptimizer:
                 "tile",
             )
 
-        raise InvalidParamError("当前生成引擎仅支持 character 和 tile 素材")
+        if asset_type == AssetType.MAP:
+            return (
+                MAP_TEMPLATE.format(
+                    style_keywords=style_keywords,
+                    user_description=user_prompt,
+                    width=width,
+                    height=height,
+                    extra_style_keywords=extra_style_keywords,
+                ),
+                "map",
+            )
+
+        raise InvalidParamError("当前生成引擎仅支持 character、tile、map 素材")
 
     # OpenAI 兼容接口的 base URL 映射
     _BASE_URLS: dict[str, str] = {

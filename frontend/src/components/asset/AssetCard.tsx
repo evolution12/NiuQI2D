@@ -72,7 +72,7 @@ export function AssetCard({
           }}
         >
           <span className={`nq-tag nq-tag--${asset.asset_type}`}>
-            {asset.asset_type}
+            {typeLabel(asset.asset_type)}
           </span>
           <span className={`nq-tag nq-tag--${asset.status}`}>
             {statusLabel(asset.status)}
@@ -88,6 +88,18 @@ export function AssetCard({
       </div>
     </div>
   );
+}
+
+function typeLabel(type: string) {
+  switch (type) {
+    case 'character': return '角色';
+    case 'tile': return '图块';
+    case 'map': return '地图';
+    case 'prop': return '道具';
+    case 'ui': return '界面';
+    case 'effect': return '特效';
+    default: return type;
+  }
 }
 
 function statusLabel(status: string) {

@@ -66,6 +66,19 @@ export function ParamPanel({ assetType, assetSubtype, params, onChange }: { asse
         </>
       )}
 
+      {/* 地图专属 */}
+      {assetType === 'map' && (
+        <div className="form-row">
+          <label className="form-label">地图尺寸</label>
+          <div style={{ display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap' }}>
+            {([[512,512],[1024,1024],[1536,1024],[2048,2048],[2048,1536]] as [number,number][]).map(([w,h]) => (
+              <button key={`${w}x${h}`} className={`nq-btn nq-btn--sm ${params.target_size[0]===w && params.target_size[1]===h ? 'nq-btn--accent' : ''}`}
+                onClick={() => up({ target_size: [w, h] })}>{w}&times;{h}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 图块专属 */}
       {assetType === 'tile' && (
         <>

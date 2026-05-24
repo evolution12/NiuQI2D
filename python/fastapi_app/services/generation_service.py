@@ -456,16 +456,29 @@ class GenerationService:
         return mapping
 
     def _provider_size_for_request(self, body: GenerateRequest) -> tuple[int, int]:
-        if body.asset_subtype != AssetSubtype.ANIMATED_SPRITESHEET:
-            return (1024, 1024)
-        actions = body.actions or ["idle"]
+        if body.asset_subtype == AssetSubtype.ANIMATED_SPRITESHEET:
+            actions = body.actions or ["idle"]
+            rows = max(1, body.direction_count * len(actions))
+            cols = max(1, body.frame_count)
+            return self._provider_size_for_grid(cols, rows)
+        # Static images: use target_size from UI, ensure minimum pixel requirement
+        tw, th = body.target_size or (256, 256)
+        return self._ensure_min_size(tw, th)
         rows = max(1, body.direction_count * len(actions))
         cols = max(1, body.frame_count)
         return self._provider_size_for_grid(cols, rows)
 
+    def _ensure_min_size(self, w: int, h: int) -> tuple[int, int]:
+        """Ensure the image size meets minimum requirements for AI providers."""
+        # Minimum dimension: at least 256px each side
+        w = max(w, 256)
+        h = max(h, 256)
+        return (w, h)
+
     def _provider_size_from_record(self, record: GenerationRecord) -> tuple[int, int]:
         if record.asset_subtype != AssetSubtype.ANIMATED_SPRITESHEET:
-            return (1024, 1024)
+            target = self._target_size(record)
+            return self._ensure_min_size(target[0], target[1])
         cols = int(record.api_params.get("sheet_cols", record.api_params.get("frame_count", 3)))
         rows = int(record.api_params.get("sheet_rows", 4))
         return self._provider_size_for_grid(max(cols, 1), max(rows, 1))

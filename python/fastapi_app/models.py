@@ -32,6 +32,7 @@ class Perspective(str, Enum):
 class AssetType(str, Enum):
     CHARACTER = "character"
     TILE = "tile"
+    MAP = "map"
     PROP = "prop"
     UI = "ui"
     EFFECT = "effect"

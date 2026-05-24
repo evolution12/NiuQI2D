@@ -12,7 +12,7 @@ export type ArtStyle = 'pixel' | 'hand_drawn' | 'cartoon' | 'realistic' | 'custo
 export type Perspective = 'top_down' | 'side_scroller' | 'isometric';
 
 /** 对齐 models.py -> AssetType */
-export type AssetType = 'character' | 'tile' | 'prop' | 'ui' | 'effect';
+export type AssetType = 'character' | 'tile' | 'map' | 'prop' | 'ui' | 'effect';
 
 /** 对齐 models.py -> AssetSubtype */
 export type AssetSubtype = 'static_image' | 'animated_spritesheet';
