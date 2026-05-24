@@ -23,7 +23,7 @@ from ..schemas import (
     SelectRecordResponse,
     VariantRequest,
 )
-from ..postprocess import PostProcessContext
+from ..postprocess import FrameExtractorStep, PostProcessContext
 from ..services.image_generator import ImageGenerator
 from ..services.postprocess import PostProcessPipeline
 from ..services.prompt_optimizer import PromptOptimizer
@@ -335,8 +335,31 @@ class GenerationService:
                 sheet_cols=sheet_cols,
             )
         )
+
+        preview_context = await FrameExtractorStep().run(
+            PostProcessContext(
+                image=source_image,
+                asset_type=record.asset_type,
+                asset_subtype=record.asset_subtype,
+                target_size=target_size,
+                sheet_rows=sheet_rows,
+                sheet_cols=sheet_cols,
+            )
+        )
+        preview_frames = preview_context.extracted_frames or [preview_context.image]
+
         frames = context.extracted_frames or [context.image]
+        preview_paths: list[str] = []
         frame_paths: list[str] = []
+        for index, frame in enumerate(preview_frames):
+            preview_paths.append(
+                await self.storage.save_preview_frame(
+                    project_id,
+                    record.id,
+                    index,
+                    self._png_bytes(frame),
+                )
+            )
         for index, frame in enumerate(frames):
             frame_paths.append(
                 await self.storage.save_processed_frame(
@@ -349,6 +372,7 @@ class GenerationService:
 
         manifest = {
             "frames": frame_paths,
+            "preview_frames": preview_paths,
             "frame_delay_ms": 120,
             "actions": self._animation_actions(actions, direction_count, frame_count, len(frame_paths)),
             "sheet_rows": sheet_rows,

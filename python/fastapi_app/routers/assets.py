@@ -176,6 +176,8 @@ def _unlink_animation_dir(storage: object, image_path: str | None) -> None:
     if path.name.startswith("frame_") and path.parent.exists():
         for child in path.parent.glob("frame_*.png"):
             child.unlink()
+        for child in path.parent.glob("preview_*.png"):
+            child.unlink()
         manifest = path.parent / "animation.json"
         if manifest.exists():
             manifest.unlink()
@@ -192,7 +194,7 @@ def _animation_frames_from_asset(storage: object, asset: Asset) -> tuple[list[st
 
     manifest = _read_animation_manifest(storage, source_path)
     if manifest is not None:
-        frames = manifest.get("frames", [])
+        frames = manifest.get("preview_frames") or manifest.get("frames", [])
         actions = manifest.get("actions", {})
         frame_delay_ms = manifest.get("frame_delay_ms", 120)
         return (

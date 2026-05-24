@@ -54,6 +54,18 @@ class StorageManager:
             image_data,
         )
 
+    async def save_preview_frame(
+        self,
+        project_id: str,
+        group_id: str,
+        frame_index: int,
+        image_data: bytes,
+    ) -> str:
+        return await self._save_image(
+            self.images_dir / project_id / "processed" / group_id / f"preview_{frame_index:03d}.png",
+            image_data,
+        )
+
     async def save_animation_manifest(
         self,
         project_id: str,
