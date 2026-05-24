@@ -176,7 +176,7 @@ class AssetUpdateRequest(BaseModel):
 
 
 class AssetResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: str
     project_id: str
@@ -188,6 +188,13 @@ class AssetResponse(BaseModel):
     tags: list[str]
     created_at: datetime
     updated_at: datetime
+
+    def model_post_init(self, __context: object) -> None:
+        """Prefix relative image paths with /images/ for frontend URL construction."""
+        if self.source_path and not self.source_path.startswith("/"):
+            self.source_path = f"/images/{self.source_path}"
+        if self.thumbnail_path and not self.thumbnail_path.startswith("/"):
+            self.thumbnail_path = f"/images/{self.thumbnail_path}"
 
 
 class AssetListResponse(BaseModel):
