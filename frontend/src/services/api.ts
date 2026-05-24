@@ -211,6 +211,7 @@ export const exportApi = {
   create: (req: ExportRequest) => api.post<ExportResponse>('/export', req),
   getHistory: (projectId: string) => api.get<ExportRecord[]>(`/export/history?project_id=${projectId}`),
   get: (id: string) => api.get<ExportRecord>(`/export/${id}`),
+  delete: (id: string) => api.delete(`/export/${id}`),
 };
 
 // --- Settings ---

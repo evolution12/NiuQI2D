@@ -36,3 +36,12 @@ async def get_export_record(
     session: AsyncSession = Depends(get_session),
 ) -> ExportRecord:
     return await ExportService(session, request.app.state.storage).get_record(export_id)
+
+
+@router.delete("/{export_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_export_record(
+    export_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    await ExportService(session, request.app.state.storage).delete_record(export_id)
