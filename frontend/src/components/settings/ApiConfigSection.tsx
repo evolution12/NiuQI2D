@@ -1,6 +1,19 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { settingsApi } from '../../services/api';
 import { toast } from '../common/Toast';
+
+const CUSTOM_IMAGE_MODEL_OPTIONS = [
+  { value: 'gpt-image-1', label: 'GPT Image 1' },
+  { value: 'dall-e-3', label: 'DALL-E 3' },
+  { value: 'doubao-seedream-4-5-251128', label: 'Doubao Seedream 4.5' },
+];
+
+const CUSTOM_TEXT_MODEL_OPTIONS = [
+  { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
+  { value: 'gpt-4o', label: 'GPT-4o' },
+  { value: 'deepseek-chat', label: 'DeepSeek Chat' },
+  { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner' },
+];
 
 interface ApiConfigSectionProps {
   title: string;
@@ -55,6 +68,10 @@ export function ApiConfigSection({
   showDoubao = false,
   showDeepSeek = false,
 }: ApiConfigSectionProps) {
+  const providerListId = useId();
+  const modelListId = useId();
+  const doubaoModelListId = useId();
+  const volcengineReqKeyListId = useId();
   const [apiKey, setApiKey] = useState('');
   const [veAk, setVeAk] = useState('');
   const [veSk, setVeSk] = useState('');
@@ -102,6 +119,13 @@ export function ApiConfigSection({
   const isDeepSeek = provider === 'deepseek';
   // OpenAI-compatible providers share the same API Key + Model UI
   const isOpenAIStyle = !isVolcengine && !isDoubao;
+  const providerOptions = [
+    { value: 'openai', label: 'OpenAI' },
+    ...(showDeepSeek ? [{ value: 'deepseek', label: 'DeepSeek' }] : []),
+    ...(showDoubao ? [{ value: 'doubao', label: '豆包（Ark API）' }] : []),
+    ...(showVolcengine ? [{ value: 'volcengine', label: '火山引擎（Visual API）' }] : []),
+  ];
+  const modelOptions = testEndpoint === 'testTextApi' ? CUSTOM_TEXT_MODEL_OPTIONS : CUSTOM_IMAGE_MODEL_OPTIONS;
 
   return (
     <div className="nq-section">
@@ -110,12 +134,19 @@ export function ApiConfigSection({
         {/* Provider selector */}
         <div className="form-row">
           <label className="form-label">供应商</label>
-          <select className="nq-select" value={provider} onChange={(e) => onProviderChange(e.target.value)} style={{ width: '100%' }}>
-            <option value="openai">OpenAI</option>
-            {showDeepSeek && <option value="deepseek">DeepSeek</option>}
-            {showDoubao && <option value="doubao">豆包（Ark API）</option>}
-            {showVolcengine && <option value="volcengine">火山引擎（Visual API）</option>}
-          </select>
+          <input
+            className="nq-input"
+            list={providerListId}
+            value={provider}
+            onChange={(e) => onProviderChange(e.target.value)}
+            placeholder="选择或输入供应商标识"
+            style={{ width: '100%' }}
+          />
+          <datalist id={providerListId}>
+            {providerOptions.map((option) => (
+              <option key={option.value} value={option.value} label={option.label} />
+            ))}
+          </datalist>
         </div>
 
         {/* OpenAI / DeepSeek fields */}
@@ -141,11 +172,17 @@ export function ApiConfigSection({
               <label className="form-label">模型</label>
               <input
                 className="nq-input"
+                list={modelListId}
                 value={model}
                 onChange={(e) => onModelChange(e.target.value)}
-                placeholder={isDeepSeek ? 'deepseek-chat' : ''}
+                placeholder={isDeepSeek ? 'deepseek-chat' : '选择或输入模型标识'}
                 style={{ width: '100%' }}
               />
+              <datalist id={modelListId}>
+                {modelOptions.map((option) => (
+                  <option key={option.value} value={option.value} label={option.label} />
+                ))}
+              </datalist>
             </div>
           </>
         )}
@@ -173,11 +210,15 @@ export function ApiConfigSection({
               <label className="form-label">模型</label>
               <input
                 className="nq-input"
+                list={doubaoModelListId}
                 value={doubaoModel}
                 onChange={(e) => onDoubaoModelChange?.(e.target.value)}
                 placeholder="doubao-seedream-4-5-251128"
                 style={{ width: '100%' }}
               />
+              <datalist id={doubaoModelListId}>
+                <option value="doubao-seedream-4-5-251128" label="Doubao Seedream 4.5" />
+              </datalist>
             </div>
           </>
         )}
@@ -212,11 +253,15 @@ export function ApiConfigSection({
               <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
                 <input
                   className="nq-input"
+                  list={volcengineReqKeyListId}
                   value={volcengineReqKey}
                   onChange={(e) => onVolcengineReqKeyChange?.(e.target.value)}
                   placeholder="high_aes_general_v21"
                   style={{ flex: 1 }}
                 />
+                <datalist id={volcengineReqKeyListId}>
+                  <option value="high_aes_general_v21" label="Visual API 通用模型" />
+                </datalist>
                 <button className="nq-btn nq-btn--sm" onClick={handleTest} disabled={testing}>
                   {testing ? '测试中...' : '测试连接'}
                 </button>

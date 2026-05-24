@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 interface ModelSelectorProps {
   label: string;
   value: string;
@@ -6,14 +8,24 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ label, value, onChange, options }: ModelSelectorProps) {
+  const listId = useId();
+
   return (
     <div className="form-row">
       <label className="form-label">{label}</label>
-      <select className="nq-select" value={value} onChange={(e) => onChange(e.target.value)} style={{ width: '100%' }}>
+      <input
+        className="nq-input"
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="选择或输入模型标识"
+        style={{ width: '100%' }}
+      />
+      <datalist id={listId}>
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
+          <option key={opt.value} value={opt.value} label={opt.label} />
         ))}
-      </select>
+      </datalist>
     </div>
   );
 }
