@@ -93,6 +93,9 @@ class ExportService:
     async def get_record(self, export_id: str) -> ExportRecord:
         return await self.export_crud.get(self.session, export_id)
 
+    async def delete_record(self, export_id: str) -> None:
+        await self.export_crud.delete(self.session, export_id)
+
     async def _load_assets(self, asset_ids: list[str]) -> list[Asset]:
         if not asset_ids:
             raise InvalidParamError("导出至少需要选择 1 个资产")

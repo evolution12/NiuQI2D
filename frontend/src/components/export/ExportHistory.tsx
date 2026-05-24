@@ -3,9 +3,16 @@ import type { ExportRecord } from '../../types';
 interface ExportHistoryProps {
   records: ExportRecord[];
   onOpenFolder: (path: string) => void;
+  onDelete: (id: string) => void;
 }
 
-export function ExportHistory({ records, onOpenFolder }: ExportHistoryProps) {
+const formatLabel: Record<string, string> = {
+  png_single: '单图 PNG',
+  spritesheet_png_json: 'Sprite Sheet + JSON',
+  tileset_png_json: 'Tileset + JSON',
+};
+
+export function ExportHistory({ records, onOpenFolder, onDelete }: ExportHistoryProps) {
   if (records.length === 0) return null;
 
   return (
@@ -33,18 +40,28 @@ export function ExportHistory({ records, onOpenFolder }: ExportHistoryProps) {
           >
             <div>
               <div style={{ fontSize: '13px', color: 'var(--text-1)' }}>
-                {record.export_format} - {record.file_size > 0 ? `${(record.file_size / 1024).toFixed(1)} KB` : '未知大小'}
+                {formatLabel[record.export_format] ?? record.export_format}
+                {' · '}
+                {record.file_size > 0 ? `${(record.file_size / 1024).toFixed(1)} KB` : '未知大小'}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-3)' }}>
                 {new Date(record.created_at).toLocaleString()}
               </div>
             </div>
-            <button
-              className="nq-btn nq-btn--sm"
-              onClick={() => onOpenFolder(record.export_path)}
-            >
-              打开文件夹
-            </button>
+            <div style={{ display: 'flex', gap: 'var(--sp-1)' }}>
+              <button
+                className="nq-btn nq-btn--sm"
+                onClick={() => onOpenFolder(record.export_path)}
+              >
+                打开文件夹
+              </button>
+              <button
+                className="nq-btn nq-btn--sm nq-btn--danger"
+                onClick={() => onDelete(record.id)}
+              >
+                删除
+              </button>
+            </div>
           </div>
         ))}
       </div>

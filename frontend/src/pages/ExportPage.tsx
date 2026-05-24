@@ -89,11 +89,12 @@ export function ExportPage() {
 
       <PathSelector value={exportPath} onChange={setExportPath} />
 
-      <button className="nq-btn nq-btn--accent nq-btn--lg" disabled={exporting || !assets.length || !exportPath.trim()} onClick={handleExport}>
+      <button className="nq-btn nq-btn--accent nq-btn--lg" disabled={exporting || !assets.length || !exportPath.trim()} onClick={handleExport}
+        style={{ padding: 'var(--sp-3) var(--sp-6)', fontSize: '15px', fontWeight: 600 }}>
         {exporting ? '导出中...' : '导出'}
       </button>
 
-      <ExportHistory records={history} onOpenFolder={handleOpenFolder} />
+      <ExportHistory records={history} onOpenFolder={handleOpenFolder} onDelete={async (id) => { try { await exportApi.delete(id); toast.success('已删除'); setHistory((p) => p.filter((r) => r.id !== id)); } catch (e: any) { toast.error('删除失败: ' + (e.message ?? '未知错误')); } }} />
     </div>
   );
 }
