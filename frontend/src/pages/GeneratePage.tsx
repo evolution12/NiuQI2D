@@ -26,10 +26,16 @@ export function GeneratePage() {
   });
   const [referencePreview, setReferencePreview] = useState<string | null>(null);
 
+  const generationSession = useAppStore((s) => s.generationSession);
+  const setGenerationSession = useAppStore((s) => s.setGenerationSession);
+  const records = generationSession?.records ?? [];
+  const optimizedPrompt = generationSession?.optimizedPrompt ?? '';
+  const selectedId = generationSession?.selectedId ?? null;
+  const setSelectedId = useCallback((id: string | null) => {
+    setGenerationSession(generationSession ? { ...generationSession, selectedId: id } : null);
+  }, [generationSession, setGenerationSession]);
+
   const [generating, setGenerating] = useState(false);
-  const [records, setRecords] = useState<GenerationRecord[]>([]);
-  const [optimizedPrompt, setOptimizedPrompt] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [imageModalSrc, setImageModalSrc] = useState<string | null>(null);
   const [addDialog, setAddDialog] = useState<{ recordId: string; name: string; tags: string } | null>(null);
 
@@ -45,7 +51,7 @@ export function GeneratePage() {
     try {
       const fn = preview ? generationApi.generatePreview : generationApi.generate;
       const r = await fn({ project_id: currentProject.id, user_prompt: prompt, ...params, preview_mode: preview });
-      setRecords(r.records); setOptimizedPrompt(r.optimized_prompt);
+      setGenerationSession({ records: r.records, optimizedPrompt: r.optimized_prompt, selectedId: null });
       toast.success(`已生成 ${r.records.length} 个候选`);
     } catch (e: any) { toast.error('生成失败: ' + (e.message ?? '未知错误')); }
     finally { setGenerating(false); }
@@ -65,7 +71,7 @@ export function GeneratePage() {
     setGenerating(true);
     try {
       const r = await generationApi.variant(id, { project_id: currentProject.id, ...params });
-      setRecords(r.records); setOptimizedPrompt(r.optimized_prompt); toast.success('变体已生成');
+      setGenerationSession({ records: r.records, optimizedPrompt: r.optimized_prompt, selectedId: null }); toast.success('变体已生成');
     } catch (e: any) { toast.error('变体生成失败: ' + (e.message ?? '未知错误')); }
     finally { setGenerating(false); }
   }, [currentProject, params]);

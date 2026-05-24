@@ -107,6 +107,7 @@ class Asset(Base, TimestampMixin):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     asset_type: Mapped[AssetType] = mapped_column(SAEnum(AssetType), nullable=False)
+    asset_subtype: Mapped[AssetSubtype | None] = mapped_column(SAEnum(AssetSubtype), nullable=True)
     status: Mapped[AssetStatus] = mapped_column(
         SAEnum(AssetStatus), nullable=False, default=AssetStatus.DRAFT
     )

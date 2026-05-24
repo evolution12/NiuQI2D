@@ -121,6 +121,7 @@ class GenerationService:
                 project_id=project_id,
                 name=body.name,
                 asset_type=record.asset_type,
+                asset_subtype=record.asset_subtype,
                 status=AssetStatus.SELECTED,
                 source_path=source_path,
                 thumbnail_path=thumbnail_path,

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { uploadApi } from '../../services/api';
+import { uploadApi, backendUrl } from '../../services/api';
 import { toast } from '../common/Toast';
 
 export function ReferenceUpload({ onUploadComplete, onRemove, previewUrl, disabled }: { onUploadComplete: (path: string) => void; onRemove: () => void; previewUrl: string | null; disabled?: boolean }) {
@@ -8,7 +8,6 @@ export function ReferenceUpload({ onUploadComplete, onRemove, previewUrl, disabl
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
-    if (!file.type.startsWith('image/')) { toast.error('仅支持图片文件'); return; }
     if (file.size > 10 * 1024 * 1024) { toast.error('文件不能超过 10MB'); return; }
     setUploading(true);
     try {
@@ -24,7 +23,7 @@ export function ReferenceUpload({ onUploadComplete, onRemove, previewUrl, disabl
       {previewUrl ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
           <div className="checkerboard" style={{ width: 48, height: 48, borderRadius: 'var(--r-md)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <img src={previewUrl} alt="ref" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+            <img src={backendUrl(previewUrl)} alt="ref" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
           </div>
           <button className="nq-btn nq-btn--sm nq-btn--danger" onClick={onRemove} disabled={disabled}>移除</button>
         </div>
