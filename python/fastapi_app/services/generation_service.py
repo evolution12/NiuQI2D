@@ -406,7 +406,6 @@ class GenerationService:
             for direction_index in range(direction_count):
                 frame_indexes = list(range(index, min(index + frame_count, total_frames)))
                 if frame_indexes:
-                    mapping[f"{action}_{direction_index + 1}"] = frame_indexes
                     if direction_index == 0:
                         mapping[action] = frame_indexes
                     action_indexes.extend(frame_indexes)
