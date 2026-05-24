@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../stores/appStore';
-import { exportApi, assetApi } from '../services/api';
+import { exportApi, assetApi, api } from '../services/api';
 import { toast } from '../components/common/Toast';
 import { EmptyState } from '../components/common/EmptyState';
 import { AssetSelector } from '../components/export/AssetSelector';
@@ -28,6 +28,29 @@ export function ExportPage() {
   }, [location.state, currentProject]);
 
   useEffect(() => { if (currentProject) exportApi.getHistory(currentProject.id).then(setHistory).catch(() => {}); }, [currentProject]);
+
+  const handleOpenFolder = async (path: string) => {
+    // Try Electron native API first
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.shell?.openPath) {
+      const err = await electronAPI.shell.openPath(path);
+      if (err) toast.error(`无法打开文件夹: ${err}`);
+      return;
+    }
+
+    // Use Python backend to open folder in OS file explorer
+    try {
+      await api.post('/utils/open-folder', { path });
+    } catch {
+      // Fallback: copy path to clipboard
+      try {
+        await navigator.clipboard.writeText(path);
+        toast.success(`路径已复制: ${path}`);
+      } catch {
+        toast.info(`导出路径: ${path}`);
+      }
+    }
+  };
 
   const handleExport = async () => {
     if (!assets.length) { toast.warning('请先选择素材'); return; }
@@ -70,7 +93,7 @@ export function ExportPage() {
         {exporting ? '导出中...' : '导出'}
       </button>
 
-      <ExportHistory records={history} onOpenFolder={(p) => toast.info(`Path: ${p}`)} />
+      <ExportHistory records={history} onOpenFolder={handleOpenFolder} />
     </div>
   );
 }

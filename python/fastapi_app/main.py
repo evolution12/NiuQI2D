@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import get_settings
 from .database import close_db, get_session_factory, init_db
 from .exceptions import NiuQIError
-from .routers import assets, export, generation, health, projects, settings as settings_router, styles, upload
+from .routers import assets, export, generation, health, projects, settings as settings_router, styles, upload, utils
 from .schemas import ErrorDetail, ErrorResponse
 from .storage import StorageManager
 from .services.style_service import StyleService
@@ -127,3 +127,4 @@ app.include_router(assets.router, prefix="/api/v1")
 app.include_router(assets.tags_router, prefix="/api/v1")
 app.include_router(export.router, prefix="/api/v1")
 app.include_router(settings_router.router, prefix="/api/v1")
+app.include_router(utils.router, prefix="/api/v1")

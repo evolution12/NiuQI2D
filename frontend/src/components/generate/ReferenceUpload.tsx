@@ -13,7 +13,7 @@ export function ReferenceUpload({ onUploadComplete, onRemove, previewUrl, disabl
     setUploading(true);
     try {
       const r = await uploadApi.upload(file, 'reference');
-      onUploadComplete(r.path); toast.success('上传成功');
+      onUploadComplete(r.url); toast.success('上传成功');
     } catch (e: any) { toast.error('上传失败: ' + (e.message ?? '未知错误')); }
     finally { setUploading(false); }
   };
