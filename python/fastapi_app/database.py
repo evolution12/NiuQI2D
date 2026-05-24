@@ -38,6 +38,23 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 async def init_db() -> None:
     async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Apply schema migrations for existing tables
+        await _run_migrations(conn)
+
+
+async def _run_migrations(conn: Any) -> None:
+    """Add columns that were introduced after initial schema creation."""
+    import sqlalchemy as sa
+
+    migrations = [
+        ("style_profiles", "is_preset", "BOOLEAN NOT NULL DEFAULT 0"),
+    ]
+    for table, column, definition in migrations:
+        try:
+            await conn.execute(sa.text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+        except Exception:
+            # Column already exists — ignore
+            pass
 
 
 async def close_db() -> None:

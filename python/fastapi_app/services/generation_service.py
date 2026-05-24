@@ -38,9 +38,9 @@ class GenerationService:
     async def generate(self, body: GenerateRequest, mode: GenerationMode) -> GenerateResponse:
         project = await self.project_crud.get(self.session, body.project_id)
         style_id = body.style_id or project.style_id
-        if style_id is None:
-            raise InvalidParamError("生成前必须选择风格")
-        style = await self.style_crud.get(self.session, style_id)
+        style = None
+        if style_id:
+            style = await self.style_crud.get(self.session, style_id)
         self._validate_asset_subtype(body.asset_type, body.asset_subtype)
 
         reference_description = self._reference_description(style, body.reference_style_description)
@@ -64,7 +64,7 @@ class GenerationService:
             project_id=body.project_id,
             user_prompt=body.user_prompt,
             optimized_prompt=optimized.prompt,
-            style_id=style.id,
+            style_id=style_id,
             asset_type=body.asset_type,
             asset_subtype=body.asset_subtype,
             mode=mode,
@@ -161,7 +161,7 @@ class GenerationService:
         record = await self.generation_crud.get(self.session, record_id)
         project_id = await self._project_id_for_record(record)
         style_id = body.style_id_override or record.style_id
-        style = await self.style_crud.get(self.session, style_id)
+        style = await self.style_crud.get(self.session, style_id) if style_id else None
         user_prompt = body.prompt_override or record.user_prompt
         reference_description = self._reference_description(style, body.reference_style_description)
 
@@ -187,7 +187,7 @@ class GenerationService:
             project_id=project_id,
             user_prompt=user_prompt,
             optimized_prompt=optimized_prompt,
-            style_id=style.id,
+            style_id=style_id,
             asset_type=record.asset_type,
             asset_subtype=record.asset_subtype,
             mode=mode,

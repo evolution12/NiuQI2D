@@ -1,10 +1,33 @@
-import type { AssetType, AssetSubtype, GenerateParams } from '../../types';
+import { useState, useEffect } from 'react';
+import { styleApi } from '../../services/api';
+import type { AssetType, AssetSubtype, GenerateParams, StyleProfile } from '../../types';
 
 export function ParamPanel({ assetType, assetSubtype, params, onChange }: { assetType: AssetType; assetSubtype: AssetSubtype | null; params: GenerateParams; onChange: (p: GenerateParams) => void }) {
   const up = (partial: Partial<GenerateParams>) => onChange({ ...params, ...partial });
+  const [styles, setStyles] = useState<StyleProfile[]>([]);
+
+  useEffect(() => {
+    styleApi.list().then(setStyles).catch(() => {});
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+      {/* 风格选择 */}
+      <div className="form-row">
+        <label className="form-label">风格</label>
+        <select
+          className="nq-select"
+          value={params.style_id ?? ''}
+          onChange={(e) => up({ style_id: e.target.value || undefined })}
+          style={{ width: '100%' }}
+        >
+          <option value="">自动（使用项目默认）</option>
+          {styles.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+      </div>
+
       {/* 尺寸 */}
       <div className="form-row">
         <label className="form-label">尺寸</label>
