@@ -27,6 +27,8 @@ class Settings(BaseModel):
     volcengine_req_key: str = "high_aes_general_v21"
     doubao_api_key: str = ""
     doubao_model: str = "doubao-seedream-4-5-251128"
+    default_style_id: str | None = None
+    default_export_path: str = ""
 
     @property
     def resolved_data_dir(self) -> Path:
@@ -83,6 +85,8 @@ def get_settings() -> Settings:
         "volcengine_req_key": "NIUQI2D_VOLCENGINE_REQ_KEY",
         "doubao_api_key": "NIUQI2D_DOUBAO_API_KEY",
         "doubao_model": "NIUQI2D_DOUBAO_MODEL",
+        "default_style_id": "NIUQI2D_DEFAULT_STYLE_ID",
+        "default_export_path": "NIUQI2D_DEFAULT_EXPORT_PATH",
     }
     for field_name, env_name in env_map.items():
         value = _env_value(env_name)
@@ -108,6 +112,8 @@ def get_settings() -> Settings:
                     "volcengine_req_key": settings.volcengine_req_key,
                     "doubao_api_key": settings.doubao_api_key,
                     "doubao_model": settings.doubao_model,
+                    "default_style_id": settings.default_style_id,
+                    "default_export_path": settings.default_export_path,
                 },
                 ensure_ascii=False,
                 indent=2,

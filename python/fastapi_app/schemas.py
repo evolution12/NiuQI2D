@@ -343,41 +343,33 @@ class ExportRecordResponse(BaseModel):
     created_at: datetime
 
 
+class ExportRequest(BaseModel):
+    asset_ids: list[str]
+    export_format: ExportFormat
+    export_path: str
+    sheet_layout: str | None = None
+    sheet_padding: int = 0
+    sheet_margin: int = 0
+    tileset_columns: int = 8
+    tileset_spacing: int = 0
+    tileset_margin: int = 0
+
+
+class ExportFileInfo(BaseModel):
+    filename: str
+    path: str
+    size: int
+
+
+class ExportResponse(BaseModel):
+    export_id: str
+    files: list[ExportFileInfo]
+    total_size: int
+
+
 class UploadResponse(BaseModel):
     path: str
     url: str
     filename: str
     size: int
     content_type: str
-
-
-class SettingsResponse(BaseModel):
-    image_api_provider: str
-    image_api_key_set: bool
-    image_api_model: str
-    text_api_provider: str
-    text_api_key_set: bool
-    text_api_model: str
-    preview_image_model: str
-    quality_image_model: str
-    default_style_id: str | None = None
-    default_export_path: str = ""
-
-
-class UpdateSettingsRequest(BaseModel):
-    image_api_provider: str | None = None
-    image_api_key: str | None = None
-    image_api_model: str | None = None
-    text_api_provider: str | None = None
-    text_api_key: str | None = None
-    text_api_model: str | None = None
-    preview_image_model: str | None = None
-    quality_image_model: str | None = None
-    default_style_id: str | None = None
-    default_export_path: str | None = None
-
-
-class ApiTestResponse(BaseModel):
-    success: bool
-    message: str
-    latency_ms: int | None = None

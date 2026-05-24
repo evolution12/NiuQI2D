@@ -1,0 +1,10 @@
+{
+  "image_api_provider": "openai",
+  "image_api_key": "",
+  "image_api_model": "gpt-image-1",
+  "text_api_provider": "openai",
+  "text_api_key": "",
+  "text_api_model": "gpt-4o-mini",
+  "preview_image_model": "dall-e-3",
+  "quality_image_model": "gpt-image-1"
+}

@@ -29,6 +29,10 @@ class ConfigService:
             text_api_model=self.settings.text_api_model,
             preview_image_model=self.settings.preview_image_model,
             quality_image_model=self.settings.quality_image_model,
+            volcengine_access_key_set=bool(self.settings.volcengine_access_key),
+            volcengine_req_key=self.settings.volcengine_req_key,
+            doubao_api_key_set=bool(self.settings.doubao_api_key),
+            doubao_model=self.settings.doubao_model,
             default_style_id=self.settings.default_style_id,
             default_export_path=self.settings.default_export_path,
         )
@@ -66,6 +70,11 @@ class ConfigService:
             "text_api_model",
             "preview_image_model",
             "quality_image_model",
+            "volcengine_access_key",
+            "volcengine_secret_key",
+            "volcengine_req_key",
+            "doubao_api_key",
+            "doubao_model",
             "default_style_id",
             "default_export_path",
         ]

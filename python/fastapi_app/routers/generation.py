@@ -66,6 +66,7 @@ async def get_generation_record(
     image_url = record.api_params.get("image_url")
     return GenerationCandidateResponse(
         id=record.id,
+        project_id=record.project_id,
         asset_id=record.asset_id,
         image_url=image_url if isinstance(image_url, str) else None,
         user_prompt=record.user_prompt,

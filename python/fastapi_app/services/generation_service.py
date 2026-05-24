@@ -9,7 +9,7 @@ from ..crud.generation import GenerationCRUD
 from ..crud.project import ProjectCRUD
 from ..crud.style import StyleCRUD
 from ..exceptions import InvalidParamError
-from ..models import Asset, AssetSubtype, AssetType, GenerationRecord, StyleProfile
+from ..models import Asset, AssetStatus, AssetSubtype, AssetType, GenerationRecord, StyleProfile
 from ..providers.base import GenerationMode
 from ..schemas import (
     AssetCreateRequest,
@@ -99,6 +99,7 @@ class GenerationService:
                 project_id=project_id,
                 name=body.name,
                 asset_type=record.asset_type,
+                status=AssetStatus.SELECTED,
                 source_path=source_path,
                 thumbnail_path=thumbnail_path,
                 tags=body.tags,
@@ -212,6 +213,7 @@ class GenerationService:
         image_url = record.api_params.get("image_url")
         return GenerationCandidateResponse(
             id=record.id,
+            project_id=record.project_id,
             asset_id=record.asset_id,
             image_url=image_url if isinstance(image_url, str) else None,
             user_prompt=record.user_prompt,
