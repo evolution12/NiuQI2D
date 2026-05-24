@@ -193,12 +193,28 @@ class ExportService:
     def _load_images(self, assets: list[Asset]) -> list[Image.Image]:
         images = []
         for asset in assets:
-            source = self.storage._resolve_image_path(asset.source_path)
-            if not source.exists():
-                raise InvalidParamError(f"资产 {asset.id} 源图片不存在")
-            with Image.open(source) as image:
-                images.append(image.convert("RGBA").copy())
+            frame_paths = self._animation_frame_paths(asset) or [asset.source_path]
+            for frame_path in frame_paths:
+                source = self.storage._resolve_image_path(frame_path)
+                if not source.exists():
+                    raise InvalidParamError(f"资产 {asset.id} 源图片不存在")
+                with Image.open(source) as image:
+                    images.append(image.convert("RGBA").copy())
         return images
+
+    def _animation_frame_paths(self, asset: Asset) -> list[str]:
+        source = self.storage._resolve_image_path(asset.source_path)
+        manifest_path = source.parent / "animation.json"
+        if not manifest_path.exists():
+            return []
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return []
+        frames = data.get("frames") if isinstance(data, dict) else None
+        if not isinstance(frames, list):
+            return []
+        return [frame for frame in frames if isinstance(frame, str)]
 
     def _spritesheet_columns(self, layout: str | None, frame_count: int) -> int:
         if frame_count <= 0:

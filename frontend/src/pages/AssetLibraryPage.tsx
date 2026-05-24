@@ -48,7 +48,7 @@ export function AssetLibraryPage() {
     try {
       const a = await assetApi.get(id);
       const recs = await generationApi.listRecords(a.project_id);
-      setDetailRecords(recs.filter((r) => r.id === id));
+      setDetailRecords(recs.filter((r) => r.asset_id === id));
       if (a.asset_type === 'character') setDetailAnim(await assetApi.getAnimation(id)); else setDetailAnim(null);
     } catch {}
   };

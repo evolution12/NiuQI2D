@@ -76,6 +76,8 @@ export interface Asset {
 /** 对齐 schemas.py -> GenerationRecordResponse */
 export interface GenerationRecord {
   id: string;
+  project_id: string;
+  asset_id: string | null;
   image_url: string;
   user_prompt: string;
   optimized_prompt: string;

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { backendUrl } from '../../services/api';
 
 interface AnimationPlayerProps {
   frames: string[];
@@ -56,7 +57,7 @@ export function AnimationPlayer({
         }}
       >
         <img
-          src={activeFrames[frameIndex]}
+          src={backendUrl(activeFrames[frameIndex])}
           alt={`Frame ${frameIndex}`}
           style={{
             maxWidth: '100%',

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from io import BytesIO
+
+from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +23,9 @@ from ..schemas import (
     SelectRecordResponse,
     VariantRequest,
 )
+from ..postprocess import PostProcessContext
 from ..services.image_generator import ImageGenerator
+from ..services.postprocess import PostProcessPipeline
 from ..services.prompt_optimizer import PromptOptimizer
 from ..storage import StorageManager
 
@@ -78,7 +83,14 @@ class GenerationService:
             for item in result.records
         ]
         for record in records:
-            await self._store_project_params(record.id, body.project_id, body.target_size)
+            await self._store_project_params(
+                record.id,
+                body.project_id,
+                body.target_size,
+                body.direction_count,
+                body.frame_count,
+                body.actions,
+            )
         refreshed = [self._candidate_response(await self.generation_crud.get(self.session, record.id)) for record in records]
         return GenerateResponse(records=refreshed, optimized_prompt=optimized.prompt, mode=mode)
 
@@ -92,6 +104,13 @@ class GenerationService:
         source_path = record.api_params.get("raw_image_path")
         if not isinstance(source_path, str) or not source_path:
             raise InvalidParamError("生成记录缺少原始图片路径")
+
+        postprocess_log = record.postprocess_log
+        if record.asset_subtype == AssetSubtype.ANIMATED_SPRITESHEET:
+            processed = await self._process_animated_record(record, project_id, source_path)
+            source_path = processed["source_path"]
+            postprocess_log = processed["postprocess_log"]
+
         thumbnail_path = await self.storage.generate_thumbnail(source_path, record.asset_type)
         asset = await self.asset_crud.create(
             self.session,
@@ -105,7 +124,18 @@ class GenerationService:
                 tags=body.tags,
             ),
         )
-        await self.generation_crud.update(self.session, record.id, {"asset_id": asset.id})
+        await self.generation_crud.update(
+            self.session,
+            record.id,
+            {
+                "asset_id": asset.id,
+                "postprocess_log": postprocess_log,
+                "api_params": {
+                    **record.api_params,
+                    "selected_source_path": source_path,
+                },
+            },
+        )
         return SelectRecordResponse(asset=asset)
 
     async def list_records(
@@ -153,7 +183,14 @@ class GenerationService:
         )
         records = [self._candidate_response(await self.generation_crud.get(self.session, item.record_id)) for item in result.records]
         for response in records:
-            await self._store_project_params(response.id, project_id, self._target_size(record))
+            await self._store_project_params(
+                response.id,
+                project_id,
+                self._target_size(record),
+                int(record.api_params.get("direction_count", 4)),
+                int(record.api_params.get("frame_count", 3)),
+                self._actions(record),
+            )
         refreshed = [self._candidate_response(await self.generation_crud.get(self.session, response.id)) for response in records]
         return GenerateResponse(records=refreshed, optimized_prompt=record.optimized_prompt, mode=mode)
 
@@ -199,7 +236,14 @@ class GenerationService:
         target_size = body.target_size_override or self._target_size(record)
         records = [self._candidate_response(await self.generation_crud.get(self.session, item.record_id)) for item in result.records]
         for response in records:
-            await self._store_project_params(response.id, project_id, target_size)
+            await self._store_project_params(
+                response.id,
+                project_id,
+                target_size,
+                int(record.api_params.get("direction_count", 4)),
+                int(record.api_params.get("frame_count", 3)),
+                self._actions(record),
+            )
         refreshed = [self._candidate_response(await self.generation_crud.get(self.session, response.id)) for response in records]
         return GenerateResponse(records=refreshed, optimized_prompt=optimized_prompt, mode=mode)
 
@@ -235,8 +279,12 @@ class GenerationService:
         record_id: str,
         project_id: str,
         target_size: tuple[int, int],
+        direction_count: int = 4,
+        frame_count: int = 3,
+        actions: list[str] | None = None,
     ) -> None:
         record = await self.generation_crud.get(self.session, record_id)
+        action_names = actions or ["idle"]
         await self.generation_crud.update(
             self.session,
             record.id,
@@ -245,9 +293,78 @@ class GenerationService:
                     **record.api_params,
                     "project_id": project_id,
                     "target_size": {"w": target_size[0], "h": target_size[1]},
+                    "direction_count": direction_count,
+                    "frame_count": frame_count,
+                    "actions": action_names,
+                    "sheet_rows": direction_count * len(action_names),
+                    "sheet_cols": frame_count,
                 }
             },
         )
+
+    async def _process_animated_record(
+        self,
+        record: GenerationRecord,
+        project_id: str,
+        source_path: str,
+    ) -> dict[str, object]:
+        image_bytes = await self.storage.get_image(source_path)
+        with Image.open(BytesIO(image_bytes)) as image:
+            source_image = image.convert("RGBA")
+
+        target_size = self._target_size(record)
+        actions = self._actions(record)
+        direction_count = int(record.api_params.get("direction_count", 4))
+        frame_count = int(record.api_params.get("frame_count", 3))
+        sheet_rows = int(record.api_params.get("sheet_rows", max(direction_count * len(actions), 1)))
+        sheet_cols = int(record.api_params.get("sheet_cols", frame_count))
+        style = await self.style_crud.get(self.session, record.style_id) if record.style_id else None
+
+        context = await PostProcessPipeline().run(
+            PostProcessContext(
+                image=source_image,
+                asset_type=record.asset_type,
+                asset_subtype=record.asset_subtype,
+                style=style,
+                api_had_transparent_bg=bool(record.api_params.get("transparent_background", False)),
+                target_size=target_size,
+                sheet_rows=sheet_rows,
+                sheet_cols=sheet_cols,
+            )
+        )
+        frames = context.extracted_frames or [context.image]
+        frame_paths: list[str] = []
+        for index, frame in enumerate(frames):
+            frame_paths.append(
+                await self.storage.save_processed_frame(
+                    project_id,
+                    record.id,
+                    index,
+                    self._png_bytes(frame),
+                )
+            )
+
+        manifest = {
+            "frames": frame_paths,
+            "frame_delay_ms": 120,
+            "actions": self._animation_actions(actions, direction_count, frame_count, len(frame_paths)),
+            "sheet_rows": sheet_rows,
+            "sheet_cols": sheet_cols,
+            "target_size": {"w": target_size[0], "h": target_size[1]},
+        }
+        await self.storage.save_animation_manifest(project_id, record.id, manifest)
+        return {
+            "source_path": frame_paths[0] if frame_paths else source_path,
+            "postprocess_log": [
+                {
+                    "step": item.step,
+                    "executed": item.executed,
+                    "params": item.params,
+                    "duration_ms": item.duration_ms,
+                }
+                for item in context.log
+            ],
+        }
 
     async def _project_id_for_record(self, record: GenerationRecord, missing_ok: bool = False) -> str | None:
         project_id = record.api_params.get("project_id")
@@ -266,6 +383,42 @@ class GenerationService:
         if isinstance(target_size, dict):
             return (int(target_size.get("w", 16)), int(target_size.get("h", 16)))
         return (16, 16)
+
+    def _actions(self, record: GenerationRecord) -> list[str]:
+        actions = record.api_params.get("actions")
+        if isinstance(actions, list):
+            names = [str(action) for action in actions if str(action)]
+            if names:
+                return names
+        return ["idle"]
+
+    def _animation_actions(
+        self,
+        actions: list[str],
+        direction_count: int,
+        frame_count: int,
+        total_frames: int,
+    ) -> dict[str, list[int]]:
+        mapping: dict[str, list[int]] = {}
+        index = 0
+        for action in actions:
+            action_indexes: list[int] = []
+            for direction_index in range(direction_count):
+                frame_indexes = list(range(index, min(index + frame_count, total_frames)))
+                if frame_indexes:
+                    mapping[f"{action}_{direction_index + 1}"] = frame_indexes
+                    if direction_index == 0:
+                        mapping[action] = frame_indexes
+                    action_indexes.extend(frame_indexes)
+                index += frame_count
+            if action_indexes:
+                mapping[f"{action}_all"] = action_indexes
+        return mapping
+
+    def _png_bytes(self, image: Image.Image) -> bytes:
+        output = BytesIO()
+        image.save(output, format="PNG")
+        return output.getvalue()
 
     def _reference_description(
         self,

@@ -99,7 +99,7 @@ class PromptOptimizer:
                     raise InvalidParamError("角色方向数必须为 1、2、4 或 8")
                 if frame_count < 1 or frame_count > 8:
                     raise InvalidParamError("动画帧数必须在 1 到 8 之间")
-                action_names = actions or ["idle", "walk"]
+                action_names = actions or ["idle"]
                 return (
                     CHARACTER_SPRITESHEET_TEMPLATE.format(
                         style_keywords=style_keywords,
