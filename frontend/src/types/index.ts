@@ -66,6 +66,7 @@ export interface Asset {
   project_id: string;
   name: string;
   asset_type: AssetType;
+  asset_subtype: AssetSubtype | null;
   status: AssetStatus;
   source_path: string;
   thumbnail_path: string;

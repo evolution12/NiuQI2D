@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { Project, StyleProfile, TaskInfo } from '../types';
+import type { GenerationRecord, Project, StyleProfile, TaskInfo } from '../types';
+
+interface GenerationSession {
+  records: GenerationRecord[];
+  optimizedPrompt: string;
+  selectedId: string | null;
+}
 
 export interface AppState {
   // Python 服务状态
@@ -16,6 +22,9 @@ export interface AppState {
   // 全局任务状态
   activeTasks: TaskInfo[];
 
+  // 生成候选（跨页面保留，退出程序清空）
+  generationSession: GenerationSession | null;
+
   // Actions
   setPythonReady: (ready: boolean) => void;
   setPythonPort: (port: number | null) => void;
@@ -27,6 +36,7 @@ export interface AppState {
   removeTask: (taskId: string) => void;
   loadProjects: () => Promise<void>;
   switchProject: (id: string) => void;
+  setGenerationSession: (session: GenerationSession | null) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -36,6 +46,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentStyle: null,
   projects: [],
   activeTasks: [],
+  generationSession: null,
 
   setPythonReady: (ready) => set({ pythonReady: ready }),
   setPythonPort: (port) => set({ pythonPort: port }),
@@ -78,4 +89,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = projects.find((p) => p.id === id) ?? null;
     set({ currentProject: project });
   },
+
+  setGenerationSession: (session) => set({ generationSession: session }),
 }));

@@ -160,6 +160,7 @@ class AssetCreateRequest(BaseModel):
     project_id: str
     name: str
     asset_type: AssetType
+    asset_subtype: AssetSubtype | None = None
     status: AssetStatus = AssetStatus.DRAFT
     source_path: str
     thumbnail_path: str | None = None
@@ -169,6 +170,7 @@ class AssetCreateRequest(BaseModel):
 class AssetUpdateRequest(BaseModel):
     name: str | None = None
     asset_type: AssetType | None = None
+    asset_subtype: AssetSubtype | None = None
     status: AssetStatus | None = None
     source_path: str | None = None
     thumbnail_path: str | None = None
@@ -182,6 +184,7 @@ class AssetResponse(BaseModel):
     project_id: str
     name: str
     asset_type: AssetType
+    asset_subtype: AssetSubtype | None = None
     status: AssetStatus
     source_path: str
     thumbnail_path: str

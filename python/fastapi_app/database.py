@@ -48,6 +48,7 @@ async def _run_migrations(conn: Any) -> None:
 
     migrations = [
         ("style_profiles", "is_preset", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("assets", "asset_subtype", "VARCHAR(30)"),
     ]
     for table, column, definition in migrations:
         try:
