@@ -134,16 +134,29 @@ class ExportService:
 
     def _write_png_single(self, assets: list[Asset], export_dir: Path) -> list[ExportFileInfo]:
         files: list[ExportFileInfo] = []
-        used_names: set[str] = set()
-        for index, asset in enumerate(assets):
+        seen: dict[str, int] = {}
+        for asset in assets:
             source = self.storage._resolve_image_path(asset.source_path)
             if not source.exists():
                 raise InvalidParamError(f"资产 {asset.id} 源图片不存在")
-            filename = self._unique_filename(self._safe_stem(asset.name) + ".png", used_names, index)
+            filename = self._disk_unique_filename(self._safe_stem(asset.name) + ".png", export_dir, seen)
             target = export_dir / filename
             shutil.copyfile(source, target)
             files.append(self._file_info(target))
+            seen[filename] = seen.get(filename, 0) + 1
         return files
+
+    def _disk_unique_filename(self, wanted: str, parent: Path, seen: dict[str, int]) -> str:
+        """Return a filename that does not exist on disk and is unique within this batch."""
+        counter = seen.get(wanted, 0) + 1
+        candidate = wanted
+        while True:
+            if not (parent / candidate).exists() and candidate not in seen:
+                return candidate
+            stem = Path(wanted).stem
+            suffix = Path(wanted).suffix
+            candidate = f"{stem}_{counter}{suffix}"
+            counter += 1
 
     def _write_spritesheet(
         self,
@@ -173,6 +186,8 @@ class ExportService:
             directions = ["front"]
             frames_per_action = len(frames)
 
+        base_name = self._safe_stem(assets[0].name) if assets else "spritesheet"
+
         result = build_spritesheet_export(
             frames=frames,
             config=SpriteSheetConfig(
@@ -182,17 +197,17 @@ class ExportService:
                 padding=body.sheet_padding,
                 margin=body.sheet_margin,
             ),
-            image_filename="spritesheet.png",
+            image_filename=f"{base_name}.png",
             naming_template="{action}_{direction}_{frame}",
             actions=actions,
             directions=directions,
             frames_per_action=frames_per_action,
             generation={"asset_ids": [asset.id for asset in assets]},
         )
-        out_dir = export_dir / "spritesheet"
+        out_dir = self._unique_dir(export_dir, base_name)
         out_dir.mkdir(parents=True, exist_ok=True)
-        png_path = out_dir / "spritesheet.png"
-        json_path = out_dir / "spritesheet.json"
+        png_path = out_dir / f"{base_name}.png"
+        json_path = out_dir / f"{base_name}.json"
         png_path.write_bytes(result.png_data)
         json_path.write_bytes(result.json_data)
         return [self._file_info(png_path), self._file_info(json_path)]
@@ -303,16 +318,32 @@ class ExportService:
             "generation": {"asset_ids": [asset.id for asset in assets]},
         }
 
-        out_dir = export_dir / "tileset"
+        base_name = self._safe_stem(asset.name) if assets else "tileset"
+        out_dir = self._unique_dir(export_dir, base_name)
         out_dir.mkdir(parents=True, exist_ok=True)
-        png_path = out_dir / "tileset.png"
-        json_path = out_dir / "tileset.json"
+        png_path = out_dir / f"{base_name}.png"
+        json_path = out_dir / f"{base_name}.json"
+
+        # Update image reference in metadata to match actual filename
+        metadata["meta"]["image"] = f"{base_name}.png"
 
         # Write PNG at original resolution
         map_image.save(png_path, format="PNG")
         json_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
 
         return [self._file_info(png_path), self._file_info(json_path)]
+
+    def _unique_dir(self, parent: Path, name: str) -> Path:
+        """Find a unique subdirectory name.  If 'name' exists, try 'name_2', 'name_3', etc."""
+        candidate = parent / name
+        if not candidate.exists():
+            return candidate
+        counter = 2
+        while True:
+            candidate = parent / f"{name}_{counter}"
+            if not candidate.exists():
+                return candidate
+            counter += 1
 
     def _read_tile_type(self, asset: Asset) -> str:
         """Read terrain type from asset. Uses terrain_type tag if set, otherwise the asset name."""
@@ -360,15 +391,6 @@ class ExportService:
     def _safe_stem(self, value: str) -> str:
         cleaned = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value)
         return cleaned.strip("_") or "asset"
-
-    def _unique_filename(self, filename: str, used_names: set[str], index: int) -> str:
-        candidate = filename
-        if candidate in used_names:
-            stem = Path(filename).stem
-            suffix = Path(filename).suffix
-            candidate = f"{stem}_{index + 1}{suffix}"
-        used_names.add(candidate)
-        return candidate
 
     def _file_info(self, path: Path) -> ExportFileInfo:
         return ExportFileInfo(filename=path.name, path=str(path), size=path.stat().st_size)
