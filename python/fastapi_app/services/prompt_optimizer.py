@@ -55,6 +55,7 @@ class PromptOptimizer:
         actions: list[str] | None = None,
         direction_count: int = 4,
         frame_count: int = 3,
+        terrain_type: str | None = None,
     ) -> OptimizedPrompt:
         cleaned_prompt = user_prompt.strip()
         if not cleaned_prompt:
@@ -71,6 +72,7 @@ class PromptOptimizer:
             actions,
             direction_count,
             frame_count,
+            terrain_type,
         )
         optimized_prompt = await self._optimize_with_provider(template_prompt)
         return OptimizedPrompt(
@@ -89,6 +91,7 @@ class PromptOptimizer:
         actions: list[str] | None,
         direction_count: int,
         frame_count: int,
+        terrain_type: str | None = None,
     ) -> tuple[str, str]:
         style_keywords = self._style_keywords(style)
         extra_style_keywords = self._extra_style_keywords(style, reference_style_description)
@@ -132,7 +135,7 @@ class PromptOptimizer:
 
         if asset_type == AssetType.TILE:
             edge_rule = self._extra_param(style, "edge_rule", "clean seamless")
-            terrain_type = self._extra_param(style, "terrain_type", "natural")
+            terrain_label = terrain_type or self._extra_param(style, "terrain_type", "natural")
             return (
                 TILE_TEMPLATE.format(
                     style_keywords=style_keywords,
@@ -140,7 +143,7 @@ class PromptOptimizer:
                     tile_width=width,
                     tile_height=height,
                     edge_rule=edge_rule,
-                    terrain_type=terrain_type,
+                    terrain_type=terrain_label,
                     extra_style_keywords=extra_style_keywords,
                 ),
                 "tile",

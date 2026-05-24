@@ -139,8 +139,26 @@ class ExportService:
     ) -> list[ExportFileInfo]:
         frames = self._load_images(assets)
         frame_size = frames[0].size
-        columns = self._spritesheet_columns(body.sheet_layout, len(frames))
-        rows = math.ceil(len(frames) / columns)
+
+        # Read animation layout from the asset's manifest
+        layout = self._read_animation_layout(assets[0])
+        actions = layout["actions"]
+        directions = layout["directions"]
+        frames_per_action = layout["frames_per_action"]
+        total_expected = len(actions) * len(directions) * frames_per_action
+
+        # Build spritesheet grid matching animation layout
+        columns = frames_per_action
+        rows = len(actions) * len(directions)
+
+        # If loaded frames don't match expected layout, fall back to auto layout
+        if len(frames) != total_expected:
+            columns = self._spritesheet_columns(body.sheet_layout, len(frames))
+            rows = math.ceil(len(frames) / columns)
+            actions = ["default"]
+            directions = ["front"]
+            frames_per_action = len(frames)
+
         result = build_spritesheet_export(
             frames=frames,
             config=SpriteSheetConfig(
@@ -152,16 +170,69 @@ class ExportService:
             ),
             image_filename="spritesheet.png",
             naming_template="{action}_{direction}_{frame}",
-            actions=["default"],
-            directions=["front"],
-            frames_per_action=len(frames),
+            actions=actions,
+            directions=directions,
+            frames_per_action=frames_per_action,
             generation={"asset_ids": [asset.id for asset in assets]},
         )
-        png_path = export_dir / "spritesheet.png"
-        json_path = export_dir / "spritesheet.json"
+        out_dir = export_dir / "spritesheet"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        png_path = out_dir / "spritesheet.png"
+        json_path = out_dir / "spritesheet.json"
         png_path.write_bytes(result.png_data)
         json_path.write_bytes(result.json_data)
         return [self._file_info(png_path), self._file_info(json_path)]
+
+    def _read_animation_layout(self, asset: Asset) -> dict[str, object]:
+        """Read direction/action/frame layout from the asset's animation manifest."""
+        default = {"actions": ["default"], "directions": ["front"], "frames_per_action": 1}
+
+        source = self.storage._resolve_image_path(asset.source_path)
+        manifest_path = source.parent / "animation.json"
+        if not manifest_path.exists():
+            return default
+
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return default
+        if not isinstance(data, dict):
+            return default
+
+        sheet_rows = int(data.get("sheet_rows", 1))
+        sheet_cols = int(data.get("sheet_cols", 1))
+        frames_data = data.get("frames")
+        total = len(frames_data) if isinstance(frames_data, list) else sheet_rows * sheet_cols
+
+        actions_data = data.get("actions")
+        if not isinstance(actions_data, dict):
+            return default
+
+        # Extract action names (excluding "_all" variants)
+        action_names = sorted(k for k in actions_data if isinstance(k, str) and not k.endswith("_all"))
+        if not action_names:
+            return default
+
+        direction_count = max(1, sheet_rows // len(action_names)) if len(action_names) > 0 else 1
+        frame_count = max(1, sheet_cols)
+
+        directions: list[str]
+        if direction_count == 1:
+            directions = ["front"]
+        elif direction_count == 2:
+            directions = ["left", "right"]
+        elif direction_count == 4:
+            directions = ["front", "back", "left", "right"]
+        elif direction_count == 8:
+            directions = ["front", "front-right", "right", "back-right", "back", "back-left", "left", "front-left"]
+        else:
+            directions = [f"dir_{i}" for i in range(direction_count)]
+
+        return {
+            "actions": action_names,
+            "directions": directions,
+            "frames_per_action": frame_count,
+        }
 
     def _write_tileset(
         self,
@@ -172,23 +243,43 @@ class ExportService:
         if body.tileset_columns <= 0:
             raise InvalidParamError("tileset_columns 必须为正整数")
         tiles = self._load_images(assets)
+        tile_size = body.tile_size or (64, 64)
+
+        # Read terrain type from each asset's generation params or tags
+        tile_types: list[str] = []
+        for asset in assets:
+            tile_type = self._read_tile_type(asset)
+            tile_types.append(tile_type)
+
         result = build_tileset_export(
             tiles=tiles,
             config=TilesetConfig(
-                tile_size=tiles[0].size,
+                tile_size=tile_size,
                 columns=body.tileset_columns,
                 spacing=body.tileset_spacing,
                 margin=body.tileset_margin,
             ),
             image_filename="tileset.png",
-            tile_types=[self._safe_stem(asset.name) for asset in assets],
+            tile_types=tile_types,
             generation={"asset_ids": [asset.id for asset in assets]},
         )
-        png_path = export_dir / "tileset.png"
-        json_path = export_dir / "tileset.json"
+        out_dir = export_dir / "tileset"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        png_path = out_dir / "tileset.png"
+        json_path = out_dir / "tileset.json"
         png_path.write_bytes(result.png_data)
         json_path.write_bytes(result.json_data)
         return [self._file_info(png_path), self._file_info(json_path)]
+
+    def _read_tile_type(self, asset: Asset) -> str:
+        """Read terrain type from asset. Uses terrain_type tag if set, otherwise the asset name."""
+        # Try to get terrain_type from tags
+        if asset.tags:
+            for tag in asset.tags:
+                if tag.startswith("terrain:"):
+                    return tag.removeprefix("terrain:")
+        # Fall back to asset name
+        return self._safe_stem(asset.name)
 
     def _load_images(self, assets: list[Asset]) -> list[Image.Image]:
         images = []
