@@ -67,7 +67,7 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
         <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
           <div className="form-row" style={{ flex: 1 }}>
-            <label className="form-label">Tile 宽度</label>
+            <label className="form-label">每个 Tile 宽度 (px)</label>
             <input
               className="nq-input"
               type="number"
@@ -78,7 +78,7 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
             />
           </div>
           <div className="form-row" style={{ flex: 1 }}>
-            <label className="form-label">Tile 高度</label>
+            <label className="form-label">每个 Tile 高度 (px)</label>
             <input
               className="nq-input"
               type="number"
@@ -89,41 +89,7 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
             />
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-          <div className="form-row" style={{ flex: 1 }}>
-            <label className="form-label">列数</label>
-            <input
-              className="nq-input"
-              type="number"
-              min={1}
-              value={config.columns ?? 8}
-              onChange={(e) => update('columns', Number(e.target.value))}
-              style={{ width: '100%' }}
-            />
-          </div>
-          <div className="form-row" style={{ flex: 1 }}>
-            <label className="form-label">Tile 间距</label>
-            <input
-              className="nq-input"
-              type="number"
-              min={0}
-              value={config.spacing ?? 0}
-              onChange={(e) => update('spacing', Number(e.target.value))}
-              style={{ width: '100%' }}
-            />
-          </div>
-          <div className="form-row" style={{ flex: 1 }}>
-            <label className="form-label">画布 Margin</label>
-            <input
-              className="nq-input"
-              type="number"
-              min={0}
-              value={config.margin ?? 0}
-              onChange={(e) => update('margin', Number(e.target.value))}
-              style={{ width: '100%' }}
-            />
-          </div>
-        </div>
+        <div style={{ color: 'var(--text-3)', fontSize: '11px', marginTop: '2px' }}>地图原图保持原始分辨率不变，JSON 记录每个 Tile 在大图中的坐标，游戏引擎按 tile_size 自动切分</div>
       </div>
     );
   }

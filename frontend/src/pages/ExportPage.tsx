@@ -79,7 +79,7 @@ export function ExportPage() {
 
       <div className="nq-section">
         <div className="nq-section-title">导出类型</div>
-        <ExportTypeSelector value={format} onChange={setFormat} />
+        <ExportTypeSelector value={format} onChange={setFormat} assets={assets} />
       </div>
 
       <div className="nq-section">

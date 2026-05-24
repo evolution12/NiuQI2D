@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..crud.asset import AssetCRUD
 from ..crud.export import ExportCRUD
 from ..exceptions import InvalidParamError
-from ..models import Asset, AssetStatus, ExportFormat, ExportRecord
+from ..models import Asset, AssetStatus, AssetSubtype, AssetType, ExportFormat, ExportRecord
 from ..postprocess.spritesheet import SpriteSheetConfig
 from ..postprocess.tileset import TilesetConfig
 from ..schemas import (
@@ -36,6 +36,7 @@ class ExportService:
 
     async def export_assets(self, body: ExportRequest) -> ExportResponse:
         assets = await self._load_assets(body.asset_ids)
+        self._validate_export_format(body.export_format, assets)
         export_dir = self._resolve_export_dir(body.export_path)
         files = await asyncio.to_thread(self._write_export_files, body, assets, export_dir)
         total_size = sum(file.size for file in files)
@@ -55,6 +56,19 @@ class ExportService:
         for asset in assets:
             await self.asset_crud.update(self.session, asset.id, {"status": AssetStatus.EXPORTED})
         return ExportResponse(export_id=record.id, files=files, total_size=total_size)
+
+    def _validate_export_format(self, fmt: ExportFormat, assets: list[Asset]) -> None:
+        """Ensure all assets are compatible with the chosen export format."""
+        for asset in assets:
+            if fmt == ExportFormat.PNG_SINGLE:
+                if asset.asset_type == AssetType.MAP:
+                    raise InvalidParamError("地图类型素材不支持单图 PNG 导出，请选择 Tileset+JSON")
+            elif fmt == ExportFormat.SPRITESHEET_PNG_JSON:
+                if asset.asset_type != AssetType.CHARACTER or asset.asset_subtype != AssetSubtype.ANIMATED_SPRITESHEET:
+                    raise InvalidParamError("仅动画精灵表素材支持 Sprite Sheet+JSON 导出")
+            elif fmt == ExportFormat.TILESET_PNG_JSON:
+                if asset.asset_type != AssetType.MAP:
+                    raise InvalidParamError("仅地图类型素材支持 Tileset+JSON 导出")
 
     async def list_history(self, project_id: str | None) -> list[ExportRecord]:
         records, _total = await self.export_crud.list(
@@ -240,35 +254,64 @@ class ExportService:
         assets: list[Asset],
         export_dir: Path,
     ) -> list[ExportFileInfo]:
-        if body.tileset_columns <= 0:
-            raise InvalidParamError("tileset_columns 必须为正整数")
-        tiles = self._load_images(assets)
-        tile_size = body.tile_size or (64, 64)
+        """Export a map asset as tileset PNG+JSON.
 
-        # Read terrain type from each asset's generation params or tags
-        tile_types: list[str] = []
-        for asset in assets:
-            tile_type = self._read_tile_type(asset)
-            tile_types.append(tile_type)
+        The map image is kept at its original size.  JSON metadata records
+        each tile cell's position so game engines can slice it.
+        """
+        tile_w, tile_h = body.tile_size or (64, 64)
+        if tile_w <= 0 or tile_h <= 0:
+            raise InvalidParamError("tile_size 必须为正整数")
 
-        result = build_tileset_export(
-            tiles=tiles,
-            config=TilesetConfig(
-                tile_size=tile_size,
-                columns=body.tileset_columns,
-                spacing=body.tileset_spacing,
-                margin=body.tileset_margin,
-            ),
-            image_filename="tileset.png",
-            tile_types=tile_types,
-            generation={"asset_ids": [asset.id for asset in assets]},
-        )
+        # Load the single map image (one asset)
+        asset = assets[0]
+        images = self._load_images([asset])
+        map_image = images[0].convert("RGBA")
+        map_w, map_h = map_image.size
+
+        cols = max(1, map_w // tile_w)
+        rows = max(1, map_h // tile_h)
+
+        # Build tile metadata — grid of cells over the map
+        tile_metadata: list[dict[str, object]] = []
+        for row in range(rows):
+            for col in range(cols):
+                tile_metadata.append({
+                    "id": row * cols + col,
+                    "type": f"tile_{row}_{col}",
+                    "terrain": [],
+                    "frame": {
+                        "x": col * tile_w,
+                        "y": row * tile_h,
+                        "w": tile_w,
+                        "h": tile_h,
+                    },
+                })
+
+        metadata = {
+            "meta": {
+                "app": "NiuQI2D",
+                "version": "1.0.0",
+                "image": "tileset.png",
+                "tile_size": {"w": tile_w, "h": tile_h},
+                "map_size": {"w": map_w, "h": map_h},
+                "tile_count": len(tile_metadata),
+                "columns": cols,
+                "rows": rows,
+            },
+            "tiles": tile_metadata,
+            "generation": {"asset_ids": [asset.id for asset in assets]},
+        }
+
         out_dir = export_dir / "tileset"
         out_dir.mkdir(parents=True, exist_ok=True)
         png_path = out_dir / "tileset.png"
         json_path = out_dir / "tileset.json"
-        png_path.write_bytes(result.png_data)
-        json_path.write_bytes(result.json_data)
+
+        # Write PNG at original resolution
+        map_image.save(png_path, format="PNG")
+        json_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+
         return [self._file_info(png_path), self._file_info(json_path)]
 
     def _read_tile_type(self, asset: Asset) -> str:
