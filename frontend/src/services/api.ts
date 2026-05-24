@@ -79,6 +79,11 @@ class ApiClient {
       );
     }
 
+    // 204 No Content — no body to parse
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     return response.json();
   }
 
@@ -172,9 +177,9 @@ export const assetApi = {
   get: (id: string) => api.get<Asset>(`/assets/${id}`),
   update: (id: string, data: Partial<Asset>) => api.put<Asset>(`/assets/${id}`, data),
   delete: (id: string) => api.delete(`/assets/${id}`),
-  batchDelete: (ids: string[]) => api.post('/assets/batch-delete', { ids }),
+  batchDelete: (ids: string[]) => api.post('/assets/batch-delete', { asset_ids: ids }),
   getAnimation: (id: string) => api.get<AnimationResponse>(`/assets/${id}/animation`),
-  getTags: (projectId: string) => api.get<TagsResponse>(`/assets/tags?project_id=${projectId}`),
+  getTags: (projectId: string) => api.get<TagsResponse>(`/tags?project_id=${projectId}`),
 };
 
 // --- Projects ---

@@ -17,13 +17,14 @@ export function StyleLibrary({ onClose, onSelect }: StyleLibraryProps) {
   const [showEditor, setShowEditor] = useState(false);
   const [editingStyle, setEditingStyle] = useState<StyleProfile | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadStyles = async () => {
     try {
       const result = await styleApi.list();
       setStyles(result);
     } catch {
-      // 静默
+      // silent
     } finally {
       setLoading(false);
     }
@@ -85,12 +86,9 @@ export function StyleLibrary({ onClose, onSelect }: StyleLibraryProps) {
     }
   };
 
-  // 简单区分预设和自定义（预设不可删除/编辑）
-  // 后端应提供 is_preset 字段，这里用名称前缀判断
-  const isPreset = (style: StyleProfile) =>
-    style.name.startsWith('像素风') ||
-    style.name === '手绘风' ||
-    style.name === '卡通风';
+  const handleEditCustom = (style: StyleProfile) => {
+    setEditingStyle(style);
+  };
 
   return (
     <div
@@ -102,18 +100,18 @@ export function StyleLibrary({ onClose, onSelect }: StyleLibraryProps) {
       <div
         className="modal-panel"
         style={{
-          width: '700px',
+          width: '720px',
           maxHeight: '80vh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
         }}
       >
-        {/* 标题 */}
+        {/* Header */}
         <div className="modal-header">
           <span className="modal-title">风格库</span>
           <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-            <button className="nq-btn nq-btn--accent nq-btn--sm" onClick={() => setShowEditor(true)}>
+            <button className="nq-btn nq-btn--accent nq-btn--sm" onClick={() => { setShowEditor(true); setEditingStyle(null); }}>
               创建风格
             </button>
             <button className="nq-btn nq-btn--sm" onClick={onClose}>
@@ -122,7 +120,7 @@ export function StyleLibrary({ onClose, onSelect }: StyleLibraryProps) {
           </div>
         </div>
 
-        {/* 内容 */}
+        {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--sp-4)' }}>
           {loading ? (
             <div style={{ textAlign: 'center', color: 'var(--text-3)', padding: 'var(--sp-8)' }}>
@@ -137,6 +135,7 @@ export function StyleLibrary({ onClose, onSelect }: StyleLibraryProps) {
                 default_size: editingStyle.default_size,
                 perspective: editingStyle.perspective,
                 color_palette: editingStyle.color_palette,
+                extra_params: editingStyle.extra_params,
               } : undefined}
               onSave={editingStyle ? handleUpdate : handleCreate}
               onCancel={() => { setShowEditor(false); setEditingStyle(null); }}
@@ -145,7 +144,7 @@ export function StyleLibrary({ onClose, onSelect }: StyleLibraryProps) {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
                 gap: 'var(--sp-3)',
               }}
             >
@@ -153,10 +152,11 @@ export function StyleLibrary({ onClose, onSelect }: StyleLibraryProps) {
                 <StyleCard
                   key={style.id}
                   style={style}
-                  isPreset={isPreset(style)}
-                  onEdit={() => setEditingStyle(style)}
-                  onDelete={() => setDeleteTarget(style.id)}
+                  expanded={expandedId === style.id}
+                  onToggleExpand={() => setExpandedId(expandedId === style.id ? null : style.id)}
                   onDuplicate={() => handleDuplicate(style)}
+                  onEdit={() => handleEditCustom(style)}
+                  onDelete={() => setDeleteTarget(style.id)}
                   onSelect={onSelect ? () => { onSelect(style); onClose(); } : undefined}
                 />
               ))}
@@ -170,7 +170,7 @@ export function StyleLibrary({ onClose, onSelect }: StyleLibraryProps) {
         </div>
       </div>
 
-      {/* 删除确认 */}
+      {/* Delete confirm */}
       <ConfirmDialog
         open={deleteTarget !== null}
         title="确认删除该风格？"

@@ -1,37 +1,20 @@
 [
   {
-    "name": "像素风 16x16",
+    "name": "像素风",
     "art_style": "pixel",
-    "default_size": {"w": 16, "h": 16},
     "perspective": "top_down",
     "extra_params": {"color_count": 16, "outline": true}
   },
   {
-    "name": "像素风 32x32",
-    "art_style": "pixel",
-    "default_size": {"w": 32, "h": 32},
-    "perspective": "top_down",
-    "extra_params": {"color_count": 32, "outline": true}
-  },
-  {
-    "name": "像素风 64x64",
-    "art_style": "pixel",
-    "default_size": {"w": 64, "h": 64},
+    "name": "卡通风",
+    "art_style": "cartoon",
     "perspective": "side_scroller",
-    "extra_params": {"color_count": 48, "outline": true}
+    "extra_params": {"bold_outlines": true, "cel_shading": true}
   },
   {
     "name": "手绘风",
     "art_style": "hand_drawn",
-    "default_size": {"w": 128, "h": 128},
     "perspective": "top_down",
     "extra_params": {"line_width": "varied", "watercolor": false}
-  },
-  {
-    "name": "卡通风",
-    "art_style": "cartoon",
-    "default_size": {"w": 256, "h": 256},
-    "perspective": "side_scroller",
-    "extra_params": {"bold_outlines": true, "cel_shading": true}
   }
 ]
