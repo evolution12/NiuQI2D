@@ -99,9 +99,10 @@ export function ApiConfigSection({
 
   const isVolcengine = provider === 'volcengine';
   const isDoubao = provider === 'doubao';
+  const isDoubaoImageApi = isDoubao && testEndpoint === 'testImageApi';
   const isDeepSeek = provider === 'deepseek';
   // OpenAI-compatible providers share the same API Key + Model UI
-  const isOpenAIStyle = !isVolcengine && !isDoubao;
+  const isOpenAIStyle = !isVolcengine && !isDoubaoImageApi;
 
   return (
     <div className="nq-section">
@@ -129,7 +130,7 @@ export function ApiConfigSection({
                   type="password"
                   value={apiKey}
                   onChange={(e) => { setApiKey(e.target.value); onKeyChange(e.target.value); }}
-                  placeholder={keySet ? '已设置（输入以更新）' : isDeepSeek ? '输入 DeepSeek API Key（sk-...）' : '输入 API Key'}
+                  placeholder={keySet ? '已设置（输入以更新）' : isDeepSeek ? '输入 DeepSeek API Key（sk-...）' : isDoubao ? '输入豆包 Ark API Key' : '输入 API Key'}
                   style={{ flex: 1 }}
                 />
                 <button className="nq-btn nq-btn--sm" onClick={handleTest} disabled={testing}>
@@ -143,7 +144,7 @@ export function ApiConfigSection({
                 className="nq-input"
                 value={model}
                 onChange={(e) => onModelChange(e.target.value)}
-                placeholder={isDeepSeek ? 'deepseek-chat' : ''}
+                placeholder={isDeepSeek ? 'deepseek-chat' : isDoubao ? '输入豆包文本模型或 Endpoint ID' : ''}
                 style={{ width: '100%' }}
               />
             </div>
@@ -151,7 +152,7 @@ export function ApiConfigSection({
         )}
 
         {/* Doubao fields */}
-        {isDoubao && (
+        {isDoubaoImageApi && (
           <>
             <div className="form-row">
               <label className="form-label">API Key</label>

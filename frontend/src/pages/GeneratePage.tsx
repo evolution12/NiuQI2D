@@ -22,7 +22,7 @@ export function GeneratePage() {
   const [prompt, setPrompt] = useState('');
   const [params, setParams] = useState<GenerateParams>({
     asset_type: 'character', asset_subtype: 'animated_spritesheet',
-    target_size: [32, 32], direction_count: 4, frame_count: 3, actions: ['idle', 'walk'],
+    target_size: [32, 32], direction_count: 4, frame_count: 3, actions: ['walk'],
   });
   const [referencePreview, setReferencePreview] = useState<string | null>(null);
 

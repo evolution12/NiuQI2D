@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import select
@@ -123,17 +125,19 @@ async def delete_asset(
 @router.get("/{asset_id}/animation", response_model=AnimationResponse)
 async def get_asset_animation(
     asset_id: str,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> AnimationResponse:
     asset = await asset_crud.get(session, asset_id)
     if asset.asset_type != AssetType.CHARACTER:
         raise InvalidParamError("仅角色资产支持动画预览")
 
-    frames = _animation_frames_from_asset(asset)
+    frames, actions, frame_delay_ms = _animation_frames_from_asset(request.app.state.storage, asset)
     return AnimationResponse(
         frames=frames,
         frame_count=len(frames),
-        actions={"default": list(range(len(frames)))} if frames else {},
+        frame_delay_ms=frame_delay_ms,
+        actions=actions or ({"default": list(range(len(frames)))} if frames else {}),
     )
 
 
@@ -152,6 +156,7 @@ async def _delete_asset_files(request: Request, asset: Asset) -> None:
     storage = request.app.state.storage
     for image_path in {asset.source_path, asset.thumbnail_path}:
         await asyncio.to_thread(_unlink_stored_image, storage, image_path)
+    await asyncio.to_thread(_unlink_animation_dir, storage, asset.source_path)
 
 
 def _unlink_stored_image(storage: object, image_path: str | None) -> None:
@@ -163,8 +168,52 @@ def _unlink_stored_image(storage: object, image_path: str | None) -> None:
         path.unlink()
 
 
-def _animation_frames_from_asset(asset: Asset) -> list[str]:
+def _unlink_animation_dir(storage: object, image_path: str | None) -> None:
+    if not image_path:
+        return
+    resolver = getattr(storage, "_resolve_image_path")
+    path = resolver(image_path)
+    if path.name.startswith("frame_") and path.parent.exists():
+        for child in path.parent.glob("frame_*.png"):
+            child.unlink()
+        for child in path.parent.glob("preview_*.png"):
+            child.unlink()
+        manifest = path.parent / "animation.json"
+        if manifest.exists():
+            manifest.unlink()
+        try:
+            path.parent.rmdir()
+        except OSError:
+            pass
+
+
+def _animation_frames_from_asset(storage: object, asset: Asset) -> tuple[list[str], dict[str, list[int]], int]:
     source_path = asset.source_path
     if Path(source_path).suffix.lower() == ".json":
-        return []
-    return [f"/images/{source_path}"]
+        return [], {}, 120
+
+    manifest = _read_animation_manifest(storage, source_path)
+    if manifest is not None:
+        frames = manifest.get("preview_frames") or manifest.get("frames", [])
+        actions = manifest.get("actions", {})
+        frame_delay_ms = manifest.get("frame_delay_ms", 120)
+        return (
+            [f"/images/{frame}" for frame in frames if isinstance(frame, str)],
+            actions if isinstance(actions, dict) else {},
+            int(frame_delay_ms) if isinstance(frame_delay_ms, int) else 120,
+        )
+
+    return [f"/images/{source_path}"], {"default": [0]}, 120
+
+
+def _read_animation_manifest(storage: object, source_path: str) -> dict[str, Any] | None:
+    resolver = getattr(storage, "_resolve_image_path")
+    path = resolver(source_path)
+    manifest_path = path.parent / "animation.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None

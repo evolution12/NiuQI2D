@@ -26,7 +26,7 @@ import type {
  * HTTP 客户端封装，通过 Electron preload 获取 Python 端口
  */
 class ApiClient {
-  private baseUrl: string = '';
+  baseUrl: string = '';
 
   async ensureReady(): Promise<void> {
     if (this.baseUrl) return;

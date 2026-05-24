@@ -16,16 +16,15 @@ MAX_PROMPT_CHARS = 4000
 TARGET_MAX_WORDS = 500
 
 SYSTEM_PROMPT = """
-You are a professional game art prompt engineer. Convert the user's short description into
-an accurate AI image generation prompt.
+你是一名专业的游戏美术提示词工程师。请将用户的简短描述转换为准确的 AI 图像生成提示词。
 
-Rules:
-1. Preserve the user's core intent.
-2. Inject professional keywords from the asset type template.
-3. Adjust visual language according to the style profile.
-4. If a reference style description is provided, blend its visual characteristics.
-5. Output English only.
-6. Do not output explanations, headings, markdown, or commentary. Output the prompt only.
+规则：
+1. 保留用户的核心意图。
+2. 融入素材类型模板中的专业关键词。
+3. 根据风格配置调整视觉语言。
+4. 如果提供了参考风格描述，请融合其中的视觉特征。
+5. 仅输出中文。
+6. 不要输出解释、标题、Markdown 或额外说明，只输出提示词正文。
 """.strip()
 
 
@@ -99,7 +98,7 @@ class PromptOptimizer:
                     raise InvalidParamError("角色方向数必须为 1、2、4 或 8")
                 if frame_count < 1 or frame_count > 8:
                     raise InvalidParamError("动画帧数必须在 1 到 8 之间")
-                action_names = actions or ["idle", "walk"]
+                action_names = actions or ["idle"]
                 return (
                     CHARACTER_SPRITESHEET_TEMPLATE.format(
                         style_keywords=style_keywords,
@@ -149,6 +148,7 @@ class PromptOptimizer:
     _BASE_URLS: dict[str, str] = {
         "openai": "https://api.openai.com/v1",
         "deepseek": "https://api.deepseek.com",
+        "doubao": "https://ark.cn-beijing.volces.com/api/v3",
     }
 
     async def _optimize_with_provider(self, template_prompt: str) -> str:

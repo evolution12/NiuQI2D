@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { backendUrl } from '../../services/api';
 
 interface AnimationPlayerProps {
   frames: string[];
@@ -14,7 +15,11 @@ export function AnimationPlayer({
   const [playing, setPlaying] = useState(true);
   const [frameIndex, setFrameIndex] = useState(0);
   const [speed, setSpeed] = useState(frameDelayMs);
-  const [selectedAction, setSelectedAction] = useState<string | null>(null);
+  const actionNames = useMemo(
+    () => (actions ? Object.keys(actions).filter((name) => !name.endsWith('_all')) : []),
+    [actions],
+  );
+  const [selectedAction, setSelectedAction] = useState<string | null>(actionNames[0] ?? null);
   const intervalRef = useRef<number | null>(null);
 
   const activeFrames = selectedAction && actions?.[selectedAction]
@@ -31,6 +36,16 @@ export function AnimationPlayer({
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [playing, speed, activeFrames.length]);
+
+  useEffect(() => {
+    setFrameIndex(0);
+  }, [selectedAction, activeFrames.length]);
+
+  useEffect(() => {
+    if (!selectedAction && actionNames.length > 0) {
+      setSelectedAction(actionNames[0]);
+    }
+  }, [selectedAction, actionNames]);
 
   if (frames.length === 0) return null;
 
@@ -50,17 +65,19 @@ export function AnimationPlayer({
           alignItems: 'center',
           justifyContent: 'center',
           width: '100%',
-          height: '200px',
+          aspectRatio: '1 / 1',
+          maxHeight: '320px',
           borderRadius: 'var(--r-md)',
           overflow: 'hidden',
+          border: '1px solid var(--border-1)',
         }}
       >
         <img
-          src={activeFrames[frameIndex]}
+          src={backendUrl(activeFrames[frameIndex])}
           alt={`Frame ${frameIndex}`}
           style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
+            width: '100%',
+            height: '100%',
             objectFit: 'contain',
             imageRendering: 'pixelated',
           }}
@@ -113,15 +130,9 @@ export function AnimationPlayer({
       </div>
 
       {/* 动作选择 */}
-      {actions && Object.keys(actions).length > 0 && (
+      {actions && actionNames.length > 0 && (
         <div style={{ display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap' }}>
-          <button
-            className={selectedAction === null ? 'nq-btn nq-btn--accent nq-btn--sm' : 'nq-btn nq-btn--sm'}
-            onClick={() => setSelectedAction(null)}
-          >
-            全部
-          </button>
-          {Object.keys(actions).map((action) => (
+          {actionNames.map((action) => (
             <button
               key={action}
               className={selectedAction === action ? 'nq-btn nq-btn--accent nq-btn--sm' : 'nq-btn nq-btn--sm'}

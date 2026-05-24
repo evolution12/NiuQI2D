@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
@@ -39,6 +41,40 @@ class StorageManager:
         return await self._save_image(
             self.images_dir / project_id / "processed" / f"{asset_id}.png", image_data
         )
+
+    async def save_processed_frame(
+        self,
+        project_id: str,
+        group_id: str,
+        frame_index: int,
+        image_data: bytes,
+    ) -> str:
+        return await self._save_image(
+            self.images_dir / project_id / "processed" / group_id / f"frame_{frame_index:03d}.png",
+            image_data,
+        )
+
+    async def save_preview_frame(
+        self,
+        project_id: str,
+        group_id: str,
+        frame_index: int,
+        image_data: bytes,
+    ) -> str:
+        return await self._save_image(
+            self.images_dir / project_id / "processed" / group_id / f"preview_{frame_index:03d}.png",
+            image_data,
+        )
+
+    async def save_animation_manifest(
+        self,
+        project_id: str,
+        group_id: str,
+        manifest: dict[str, Any],
+    ) -> str:
+        target_path = self.images_dir / project_id / "processed" / group_id / "animation.json"
+        await asyncio.to_thread(self._save_json_sync, target_path, manifest)
+        return self._relative_image_path(target_path)
 
     async def save_reference_image(self, style_id: str, image_data: bytes) -> str:
         return await self._save_image(self.images_dir / "references" / f"{style_id}.png", image_data)
@@ -84,6 +120,10 @@ class StorageManager:
     def _save_image_sync(self, target_path: Path, image_data: bytes) -> None:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_bytes(image_data)
+
+    def _save_json_sync(self, target_path: Path, data: dict[str, Any]) -> None:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _resolve_image_path(self, path: str) -> Path:
         candidate = Path(path)
