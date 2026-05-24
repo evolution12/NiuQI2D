@@ -163,6 +163,7 @@ export interface ExportRequest {
   tileset_columns?: number;
   tileset_spacing?: number;
   tileset_margin?: number;
+  tile_size?: [number, number];
 }
 
 /** 对齐 schemas.py -> UploadResponse */
@@ -279,6 +280,7 @@ export interface GenerateParams {
   frame_count?: number;
   actions?: string[];
   reference_image_path?: string;
+  terrain_type?: string;
 }
 
 /** 导出配置联合类型 */

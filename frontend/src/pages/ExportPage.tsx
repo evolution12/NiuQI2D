@@ -58,7 +58,7 @@ export function ExportPage() {
     if (!currentProject) return;
     setExporting(true);
     try {
-      await exportApi.create({ asset_ids: assets.map((a) => a.id), export_format: format, export_path: exportPath, sheet_layout: config.layout as string, sheet_padding: config.padding as number, sheet_margin: config.margin as number, tileset_columns: config.columns as number, tileset_spacing: config.spacing as number, tileset_margin: config.margin as number });
+      await exportApi.create({ asset_ids: assets.map((a) => a.id), export_format: format, export_path: exportPath, sheet_layout: config.layout as string, sheet_padding: config.padding as number, sheet_margin: config.margin as number, tileset_columns: config.columns as number, tileset_spacing: config.spacing as number, tileset_margin: config.margin as number, tile_size: [config.tileW as number || 64, config.tileH as number || 64] });
       toast.success('导出成功');
       setHistory(await exportApi.getHistory(currentProject.id));
     } catch (e: any) { toast.error('导出失败: ' + (e.message ?? '未知错误')); }

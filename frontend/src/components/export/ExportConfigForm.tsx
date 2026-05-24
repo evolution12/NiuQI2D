@@ -67,6 +67,30 @@ export function ExportConfigForm({ format, config, onChange }: ExportConfigFormP
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
         <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
           <div className="form-row" style={{ flex: 1 }}>
+            <label className="form-label">Tile 宽度</label>
+            <input
+              className="nq-input"
+              type="number"
+              min={1}
+              value={config.tileW ?? 64}
+              onChange={(e) => update('tileW', Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div className="form-row" style={{ flex: 1 }}>
+            <label className="form-label">Tile 高度</label>
+            <input
+              className="nq-input"
+              type="number"
+              min={1}
+              value={config.tileH ?? 64}
+              onChange={(e) => update('tileH', Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+          <div className="form-row" style={{ flex: 1 }}>
             <label className="form-label">列数</label>
             <input
               className="nq-input"

@@ -17,13 +17,11 @@ export function AssetCard({
   return (
     <div
       className="nq-card"
-      onClick={onDetail}
       style={{
         border: selected
           ? '2px solid var(--accent)'
           : undefined,
         overflow: 'hidden',
-        cursor: 'pointer',
         transition: 'border-color var(--t)',
       }}
     >
@@ -70,6 +68,7 @@ export function AssetCard({
             alignItems: 'center',
             gap: 'var(--sp-1)',
             marginTop: 'var(--sp-1)',
+            flexWrap: 'wrap',
           }}
         >
           <span className={`nq-tag nq-tag--${asset.asset_type}`}>
@@ -79,6 +78,13 @@ export function AssetCard({
             {statusLabel(asset.status)}
           </span>
         </div>
+        <button
+          className="nq-btn nq-btn--sm"
+          onClick={(e) => { e.stopPropagation(); onDetail(); }}
+          style={{ marginTop: 'var(--sp-2)', width: '100%' }}
+        >
+          详情
+        </button>
       </div>
     </div>
   );

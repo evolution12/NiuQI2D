@@ -68,10 +68,33 @@ export function ParamPanel({ assetType, assetSubtype, params, onChange }: { asse
 
       {/* 图块专属 */}
       {assetType === 'tile' && (
-        <div className="form-row">
-          <label className="form-label">边缘规则</label>
-          <select className="nq-select" style={{ width: '100%' }}><option value="seamless">无缝拼接</option><option value="bordered">有边框</option></select>
-        </div>
+        <>
+          <div className="form-row">
+            <label className="form-label">地块类型</label>
+            <select
+              className="nq-select"
+              value={params.terrain_type ?? ''}
+              onChange={(e) => up({ terrain_type: e.target.value || undefined })}
+              style={{ width: '100%' }}
+            >
+              <option value="">通用</option>
+              <option value="grass">草地</option>
+              <option value="dirt">泥土</option>
+              <option value="sand">沙地</option>
+              <option value="water">水面</option>
+              <option value="stone">石地</option>
+              <option value="ice">冰面</option>
+              <option value="lava">岩浆</option>
+              <option value="swamp">沼泽</option>
+              <option value="wood">木质</option>
+              <option value="metal">金属</option>
+            </select>
+          </div>
+          <div className="form-row">
+            <label className="form-label">边缘规则</label>
+            <select className="nq-select" style={{ width: '100%' }}><option value="seamless">无缝拼接</option><option value="bordered">有边框</option></select>
+          </div>
+        </>
       )}
     </div>
   );

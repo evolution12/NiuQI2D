@@ -63,6 +63,7 @@ class GenerationService:
             actions=body.actions,
             direction_count=body.direction_count,
             frame_count=body.frame_count,
+            terrain_type=body.terrain_type,
         )
         generator = ImageGenerator(self.session, self.storage, self.settings)
         result = await generator.generate_candidates(
@@ -91,6 +92,7 @@ class GenerationService:
                 body.direction_count,
                 body.frame_count,
                 body.actions,
+                body.terrain_type,
             )
         refreshed = [self._candidate_response(await self.generation_crud.get(self.session, record.id)) for record in records]
         return GenerateResponse(records=refreshed, optimized_prompt=optimized.prompt, mode=mode)
@@ -192,6 +194,7 @@ class GenerationService:
                 int(record.api_params.get("direction_count", 4)),
                 int(record.api_params.get("frame_count", 3)),
                 self._actions(record),
+                self._terrain_type(record),
             )
         refreshed = [self._candidate_response(await self.generation_crud.get(self.session, response.id)) for response in records]
         return GenerateResponse(records=refreshed, optimized_prompt=record.optimized_prompt, mode=mode)
@@ -246,6 +249,7 @@ class GenerationService:
                 int(record.api_params.get("direction_count", 4)),
                 int(record.api_params.get("frame_count", 3)),
                 self._actions(record),
+                self._terrain_type(record),
             )
         refreshed = [self._candidate_response(await self.generation_crud.get(self.session, response.id)) for response in records]
         return GenerateResponse(records=refreshed, optimized_prompt=optimized_prompt, mode=mode)
@@ -285,22 +289,28 @@ class GenerationService:
         direction_count: int = 4,
         frame_count: int = 3,
         actions: list[str] | None = None,
+        terrain_type: str | None = None,
     ) -> None:
         record = await self.generation_crud.get(self.session, record_id)
         action_names = actions or ["idle"]
+        params_update: dict[str, object] = {
+            "project_id": project_id,
+            "target_size": {"w": target_size[0], "h": target_size[1]},
+            "direction_count": direction_count,
+            "frame_count": frame_count,
+            "actions": action_names,
+            "sheet_rows": direction_count * len(action_names),
+            "sheet_cols": frame_count,
+        }
+        if terrain_type:
+            params_update["terrain_type"] = terrain_type
         await self.generation_crud.update(
             self.session,
             record.id,
             {
                 "api_params": {
                     **record.api_params,
-                    "project_id": project_id,
-                    "target_size": {"w": target_size[0], "h": target_size[1]},
-                    "direction_count": direction_count,
-                    "frame_count": frame_count,
-                    "actions": action_names,
-                    "sheet_rows": direction_count * len(action_names),
-                    "sheet_cols": frame_count,
+                    **params_update,
                 }
             },
         )
@@ -419,6 +429,10 @@ class GenerationService:
                 return names
         return ["idle"]
 
+    def _terrain_type(self, record: GenerationRecord) -> str | None:
+        t = record.api_params.get("terrain_type")
+        return str(t) if isinstance(t, str) and t else None
+
     def _animation_actions(
         self,
         actions: list[str],
@@ -529,11 +543,13 @@ class GenerationService:
 
     def _reference_description(
         self,
-        style: StyleProfile,
+        style: StyleProfile | None,
         override: str | None,
     ) -> str | None:
         if override:
             return override
+        if style is None:
+            return None
         extra_params = style.extra_params or {}
         value = extra_params.get("reference_style_description")
         return value if isinstance(value, str) else None

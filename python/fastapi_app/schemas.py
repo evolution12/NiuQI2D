@@ -290,6 +290,7 @@ class GenerateRequest(BaseModel):
     frame_count: int = 3
     actions: list[str] | None = None
     target_size: tuple[int, int] = (16, 16)
+    terrain_type: str | None = None
     preview_mode: bool = False
     transparent_background: bool = True
     candidate_count: int | None = None
@@ -360,6 +361,7 @@ class ExportRequest(BaseModel):
     tileset_columns: int = 8
     tileset_spacing: int = 0
     tileset_margin: int = 0
+    tile_size: tuple[int, int] = (64, 64)
 
 
 class ExportFileInfo(BaseModel):
