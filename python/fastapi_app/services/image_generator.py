@@ -154,6 +154,7 @@ class ImageGenerator:
             record = await self.generation_crud.create(
                 self.session,
                 GenerationRecordCreateRequest(
+                    project_id=project_id,
                     user_prompt=user_prompt,
                     optimized_prompt=optimized_prompt,
                     style_id=style_id,
@@ -201,15 +202,29 @@ class ImageGenerator:
         return records
 
     def _build_provider(self, mode: GenerationMode) -> ImageGeneratorBase:
-        if self.settings.image_api_provider != "openai":
-            raise InvalidParamError(f"暂不支持图片生成提供商 {self.settings.image_api_provider}")
-        model = self._model_for_mode(mode)
-        quality = "standard" if mode == GenerationMode.PREVIEW else "hd"
-        return OpenAIProvider(
-            api_key=self.settings.image_api_key,
-            model=model,
-            quality=quality,
-        )
+        provider = self.settings.image_api_provider
+        if provider == "openai":
+            model = self._model_for_mode(mode)
+            quality = "standard" if mode == GenerationMode.PREVIEW else "hd"
+            return OpenAIProvider(
+                api_key=self.settings.image_api_key,
+                model=model,
+                quality=quality,
+            )
+        if provider == "volcengine":
+            from ..providers.volcengine_provider import VolcengineProvider
+            return VolcengineProvider(
+                access_key=self.settings.volcengine_access_key,
+                secret_key=self.settings.volcengine_secret_key,
+                req_key=self.settings.volcengine_req_key,
+            )
+        if provider == "doubao":
+            from ..providers.doubao_provider import DoubaoArkProvider
+            return DoubaoArkProvider(
+                api_key=self.settings.doubao_api_key,
+                model=self.settings.doubao_model,
+            )
+        raise InvalidParamError(f"暂不支持图片生成提供商 {provider}")
 
     def _model_for_mode(self, mode: GenerationMode) -> str:
         if mode == GenerationMode.PREVIEW:

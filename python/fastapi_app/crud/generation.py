@@ -14,6 +14,20 @@ class GenerationCRUD(
     def __init__(self) -> None:
         super().__init__(GenerationRecord, "生成记录")
 
+    async def list_by_project(
+        self,
+        session: AsyncSession,
+        project_id: str,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[GenerationRecord], int]:
+        stmt = (
+            select(GenerationRecord)
+            .where(GenerationRecord.project_id == project_id)
+            .order_by(GenerationRecord.created_at.desc())
+        )
+        return await self.list(session, page=page, page_size=page_size, statement=stmt)
+
     async def list_by_style(
         self,
         session: AsyncSession,

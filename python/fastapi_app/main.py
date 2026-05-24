@@ -81,7 +81,16 @@ app.mount("/images", StaticFiles(directory=images_dir), name="images")
 if os.getenv("NIUQI2D_DEV") == "1":
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173"],
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+        allow_credentials=True,
+    )
+else:
+    # 非开发模式也启用 CORS，以便前后端独立运行时正常工作
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
         allow_methods=["*"],
         allow_headers=["*"],
     )
