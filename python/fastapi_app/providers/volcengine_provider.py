@@ -57,25 +57,51 @@ class VolcengineProvider(ImageGeneratorBase):
 
         images: list[GeneratedImage] = []
         for i in range(n):
-            payload: dict[str, Any] = {
-                "req_key": self.req_key,
-                "prompt": prompt,
-                "width": size[0],
-                "height": size[1],
-                "return_url": False,
-                "logo_info": {"add_logo": False},
-            }
-            if seed is not None:
-                try:
-                    payload["seed"] = int(seed)
-                except ValueError:
-                    pass
-
+            payload = self._build_payload(prompt, size, seed)
             data = await self._post_with_retry(payload)
             parsed = self._parse_response(data, size, seed)
             images.extend(parsed)
 
         return images[:n]
+
+    async def generate_with_reference(
+        self,
+        prompt: str,
+        reference_image: bytes,
+        size: tuple[int, int] = (1024, 1024),
+        n: int = 1,
+        transparent_background: bool = False,
+        seed: str | None = None,
+    ) -> list[GeneratedImage]:
+        self._validate_args(prompt, size, n)
+
+        image_b64 = base64.b64encode(reference_image).decode("ascii")
+
+        images: list[GeneratedImage] = []
+        for i in range(n):
+            payload = self._build_payload(prompt, size, seed)
+            payload["binary_data_base64"] = [image_b64]
+            data = await self._post_with_retry(payload)
+            parsed = self._parse_response(data, size, seed)
+            images.extend(parsed)
+
+        return images[:n]
+
+    def _build_payload(self, prompt: str, size: tuple[int, int], seed: str | None) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "req_key": self.req_key,
+            "prompt": prompt,
+            "width": size[0],
+            "height": size[1],
+            "return_url": False,
+            "logo_info": {"add_logo": False},
+        }
+        if seed is not None:
+            try:
+                payload["seed"] = int(seed)
+            except ValueError:
+                pass
+        return payload
 
     def estimate_cost(
         self,

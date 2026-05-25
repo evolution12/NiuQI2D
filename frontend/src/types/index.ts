@@ -285,6 +285,37 @@ export interface GenerateParams {
   edge_rule?: string;
 }
 
+// --- Quality Pipeline types ---
+
+export interface QualityPipelineBaseResponse {
+  records: GenerationRecord[];
+  optimized_prompt: string;
+  pipeline_id: string;
+}
+
+export interface QualityPipelineDirectionRequest {
+  base_record_id: string;
+  direction_count?: number;
+  frame_count?: number;
+  actions?: string[];
+  target_size: [number, number];
+  seed?: string;
+}
+
+export interface DirectionResult {
+  direction: string;
+  status: 'success' | 'failed';
+  record_id: string | null;
+  error?: string;
+}
+
+export interface QualityPipelineDirectionResponse {
+  composed_record_id: string;
+  pipeline_id: string;
+  direction_results: DirectionResult[];
+  manifest: Record<string, unknown>;
+}
+
 /** 导出配置联合类型 */
 export type ExportConfig =
   | { format: 'png_single' }

@@ -44,6 +44,18 @@ class ImageGeneratorBase(ABC):
     ) -> list[GeneratedImage]:
         raise NotImplementedError
 
+    async def generate_with_reference(
+        self,
+        prompt: str,
+        reference_image: bytes,
+        size: tuple[int, int] = (1024, 1024),
+        n: int = 1,
+        transparent_background: bool = False,
+        seed: str | None = None,
+    ) -> list[GeneratedImage]:
+        """带参考图的生成。各 provider 自行决定如何利用参考图。"""
+        return await self.generate(prompt, size, n, transparent_background, seed)
+
     @abstractmethod
     def estimate_cost(
         self,

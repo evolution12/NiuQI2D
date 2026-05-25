@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import logging
 from typing import Any
 
@@ -13,6 +14,7 @@ from .base import CostEstimate, GeneratedImage, ImageGeneratorBase
 logger = logging.getLogger(__name__)
 
 ARK_API_URL = "https://ark.cn-beijing.volces.com/api/v3/images/generations"
+ARK_EDITS_URL = "https://ark.cn-beijing.volces.com/api/v3/images/edits"
 GENERATION_TIMEOUT_SECONDS = 120.0
 MAX_RETRIES = 3
 RETRY_BASE_DELAY_SECONDS = 2.0
@@ -54,25 +56,56 @@ class DoubaoArkProvider(ImageGeneratorBase):
     ) -> list[GeneratedImage]:
         self._validate_args(prompt, size, n)
 
-        # seedream 模型有最低像素要求，自动向上调整
-        if size[0] * size[1] < self.MIN_PIXELS:
-            scale = (self.MIN_PIXELS / (size[0] * size[1])) ** 0.5
-            old_size = size
-            size = (round(size[0] * scale), round(size[1] * scale))
-            logger.info("尺寸 %s 低于最低像素要求，已调整为 %s", old_size, size)
-
-        size_str = f"{size[0]}x{size[1]}"
+        size = self._adjust_size(size)
 
         payload: dict[str, Any] = {
             "model": self.model,
             "prompt": prompt,
-            "size": size_str,
+            "size": f"{size[0]}x{size[1]}",
             "n": n,
             "response_format": "b64_json",
         }
 
         data = await self._post_with_retry(payload)
         return self._parse_response(data, size, seed)
+
+    async def generate_with_reference(
+        self,
+        prompt: str,
+        reference_image: bytes,
+        size: tuple[int, int] = (1024, 1024),
+        n: int = 1,
+        transparent_background: bool = False,
+        seed: str | None = None,
+    ) -> list[GeneratedImage]:
+        self._validate_args(prompt, size, n)
+
+        size = self._adjust_size(size)
+
+        image_b64 = base64.b64encode(reference_image).decode("ascii")
+        # Try data-URI format which some APIs expect for inline base64 images
+        image_data_uri = f"data:image/png;base64,{image_b64}"
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "prompt": prompt,
+            "size": f"{size[0]}x{size[1]}",
+            "n": n,
+            "response_format": "b64_json",
+            "image": image_data_uri,
+        }
+
+        print(f"[Doubao] generate_with_reference: size={size}, prompt_len={len(prompt)}, image_data_uri_len={len(image_data_uri)}")
+        data = await self._post_with_retry(payload)
+        return self._parse_response(data, size, seed)
+
+    def _adjust_size(self, size: tuple[int, int]) -> tuple[int, int]:
+        """Adjust size to meet seedream minimum pixel requirements."""
+        if size[0] * size[1] < self.MIN_PIXELS:
+            scale = (self.MIN_PIXELS / (size[0] * size[1])) ** 0.5
+            old_size = size
+            size = (round(size[0] * scale), round(size[1] * scale))
+            logger.info("尺寸 %s 低于最低像素要求，已调整为 %s", old_size, size)
+        return size
 
     def estimate_cost(
         self,
@@ -137,14 +170,74 @@ class DoubaoArkProvider(ImageGeneratorBase):
                 await self._sleep_before_retry(attempt)
                 continue
             if response.status_code >= 400:
+                err_body = response.text[:800]
+                print(f"[Doubao] generations API error: status={response.status_code}, body={err_body}")
                 raise ApiCallFailedError(
-                    "豆包文生图 API 返回错误",
-                    {"status_code": response.status_code, "body": response.text[:500]},
+                    f"豆包文生图 API 返回错误 (status={response.status_code})",
+                    {"status_code": response.status_code, "body": err_body},
                 )
 
             return response.json()
 
         raise last_error or ApiCallFailedError("豆包文生图生成失败")
+
+    async def _post_edit_with_retry(self, form_files: list[tuple[str, Any]]) -> dict[str, Any]:
+        """POST multipart form to /images/edits endpoint (with reference image)."""
+        if not self.api_key:
+            raise ApiKeyInvalidError("未配置豆包 API Key")
+
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+
+        last_error: ApiCallFailedError | GenerationTimeoutError | None = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                    response = await client.post(
+                        ARK_EDITS_URL,
+                        headers=headers,
+                        files=form_files,
+                    )
+            except httpx.TimeoutException as exc:
+                last_error = GenerationTimeoutError(
+                    "豆包图片编辑请求超时",
+                    {"attempt": attempt, "max_retries": self.max_retries},
+                )
+                if attempt >= self.max_retries:
+                    raise last_error from exc
+                await self._sleep_before_retry(attempt)
+                continue
+            except httpx.HTTPError as exc:
+                last_error = ApiCallFailedError(
+                    "豆包图片编辑 API 请求失败",
+                    {"attempt": attempt, "provider": self.provider_name},
+                )
+                if attempt >= self.max_retries:
+                    raise last_error from exc
+                await self._sleep_before_retry(attempt)
+                continue
+
+            if response.status_code in (401, 403):
+                raise ApiKeyInvalidError("豆包 API Key 无效")
+            if response.status_code in (408, 429) or response.status_code >= 500:
+                last_error = ApiCallFailedError(
+                    "豆包图片编辑 API 暂时不可用",
+                    {"attempt": attempt, "status_code": response.status_code, "body": response.text[:500]},
+                )
+                if attempt >= self.max_retries:
+                    raise last_error
+                await self._sleep_before_retry(attempt)
+                continue
+            if response.status_code >= 400:
+                err_body = response.text[:800]
+                print(f"[Doubao] API error: status={response.status_code}, body={err_body}")
+                raise ApiCallFailedError(
+                    f"豆包图片编辑 API 返回错误 (status={response.status_code})",
+                    {"status_code": response.status_code, "body": err_body},
+                )
+
+            return response.json()
+
+        raise last_error or ApiCallFailedError("豆包图片编辑失败")
 
     def _parse_response(
         self,

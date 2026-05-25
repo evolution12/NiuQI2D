@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../stores/appStore';
-import { generationApi } from '../services/api';
+import { generationApi, backendUrl } from '../services/api';
 import { toast } from '../components/common/Toast';
 import { EmptyState } from '../components/common/EmptyState';
 import { AssetTypeSelector } from '../components/generate/AssetTypeSelector';
@@ -12,6 +12,8 @@ import { ReferenceUpload } from '../components/generate/ReferenceUpload';
 import { CandidateGrid } from '../components/generate/CandidateGrid';
 import { ImageModal } from '../components/generate/ImageModal';
 import type { AssetType, AssetSubtype, GenerateParams } from '../types';
+
+type PipelineStep = 'idle' | 'base_select' | 'generating_directions' | 'done';
 
 export function GeneratePage() {
   const navigate = useNavigate();
@@ -39,6 +41,13 @@ export function GeneratePage() {
   const [imageModalSrc, setImageModalSrc] = useState<string | null>(null);
   const [addDialog, setAddDialog] = useState<{ recordId: string; name: string; tags: string } | null>(null);
 
+  // Quality pipeline state
+  const [pipelineStep, setPipelineStep] = useState<PipelineStep>('idle');
+  const [pipelineId, setPipelineId] = useState<string | null>(null);
+  const [baseRecordId, setBaseRecordId] = useState<string | null>(null);
+  const [directionProgress, setDirectionProgress] = useState<string>('');
+  const [composedRecord, setComposedRecord] = useState<GenerationRecord | null>(null);
+
   const handleTypeChange = useCallback((type: AssetType, subtype: AssetSubtype | null) => {
     setAssetType(type); setAssetSubtype(subtype);
     setParams((p) => ({ ...p, asset_type: type, asset_subtype: subtype ?? undefined }));
@@ -48,14 +57,63 @@ export function GeneratePage() {
     if (!currentProject) { toast.warning('请先选择一个项目'); return; }
     if (!prompt.trim()) { toast.warning('请输入描述'); return; }
     setGenerating(true); setSelectedId(null);
+    setPipelineStep('idle');
+
+    const usePipeline = !preview && assetSubtype === 'animated_spritesheet';
+
     try {
-      const fn = preview ? generationApi.generatePreview : generationApi.generate;
-      const r = await fn({ project_id: currentProject.id, user_prompt: prompt, ...params, preview_mode: preview });
-      setGenerationSession({ records: r.records, optimizedPrompt: r.optimized_prompt, selectedId: null });
-      toast.success(`已生成 ${r.records.length} 个候选`);
+      if (usePipeline) {
+        // Quality pipeline Step 1: base character candidates
+        const r = await generationApi.qualityPipelineBase({
+          project_id: currentProject.id, user_prompt: prompt, ...params,
+        });
+        setPipelineId(r.pipeline_id);
+        setGenerationSession({ records: r.records, optimizedPrompt: r.optimized_prompt, selectedId: null });
+        setPipelineStep('base_select');
+        toast.success(`已生成 ${r.records.length} 个基座图候选，请选择一个`);
+      } else {
+        const fn = preview ? generationApi.generatePreview : generationApi.generate;
+        const r = await fn({ project_id: currentProject.id, user_prompt: prompt, ...params, preview_mode: preview });
+        setGenerationSession({ records: r.records, optimizedPrompt: r.optimized_prompt, selectedId: null });
+        toast.success(`已生成 ${r.records.length} 个候选`);
+      }
     } catch (e: any) { toast.error('生成失败: ' + (e.message ?? '未知错误')); }
     finally { setGenerating(false); }
-  }, [currentProject, prompt, params]);
+  }, [currentProject, prompt, params, assetSubtype]);
+
+  const handleSelectBase = useCallback(async () => {
+    if (!selectedId || !currentProject) return;
+    setBaseRecordId(selectedId);
+    setPipelineStep('generating_directions');
+    setGenerating(true);
+    setDirectionProgress('正在生成方向动画...');
+
+    try {
+      const r = await generationApi.qualityPipelineDirections({
+        base_record_id: selectedId,
+        direction_count: params.direction_count,
+        frame_count: params.frame_count,
+        actions: params.actions,
+        target_size: params.target_size,
+      });
+      const successCount = r.direction_results.filter((d) => d.status === 'success').length;
+      const totalCount = r.direction_results.length;
+      setDirectionProgress(`方向生成完成: ${successCount}/${totalCount} 成功`);
+      setPipelineStep('done');
+
+      // Fetch the composed record so we can display it and add to library
+      const record = await generationApi.getRecord(r.composed_record_id);
+      setComposedRecord(record);
+      setGenerationSession({ records: [record], optimizedPrompt: '', selectedId: record.id });
+
+      toast.success(`方向动画已生成 (${successCount}/${totalCount})`);
+    } catch (e: any) {
+      toast.error('方向生成失败: ' + (e.message ?? '未知错误'));
+      setPipelineStep('base_select');
+    } finally {
+      setGenerating(false);
+    }
+  }, [selectedId, currentProject, params]);
 
   const handleAddToLibrary = async () => {
     if (!addDialog) return;
@@ -123,7 +181,67 @@ export function GeneratePage() {
         </div>
       </div>
 
-      {records.length > 0 && (
+      {records.length > 0 && pipelineStep === 'base_select' && (
+        <div style={{ marginTop: 'var(--sp-4)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', marginBottom: 'var(--sp-3)' }}>
+            <span style={{ fontWeight: 600 }}>选择基座图</span>
+            <span style={{ fontSize: '12px', color: 'var(--text-3)' }}>选择一个作为方向动画生成的参考基座</span>
+          </div>
+          <CandidateGrid records={records} optimizedPrompt={optimizedPrompt} selectedId={selectedId}
+            onSelect={setSelectedId}
+            onAddToLibrary={() => {}}
+            onRetry={() => handleGenerate(false)} onVariant={handleVariant}
+          />
+          <div style={{ marginTop: 'var(--sp-3)', display: 'flex', gap: 'var(--sp-2)' }}>
+            <button className="nq-btn nq-btn--accent nq-btn--lg" disabled={!selectedId || generating}
+              onClick={handleSelectBase}>
+              {generating ? '生成中...' : '以此为基础生成方向动画'}
+            </button>
+            <button className="nq-btn nq-btn--lg" onClick={() => { setPipelineStep('idle'); setPipelineId(null); }}>
+              重新生成基座图
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pipelineStep === 'generating_directions' && (
+        <div style={{ marginTop: 'var(--sp-4)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--sp-3)', padding: 'var(--sp-8)' }}>
+          <div className="spinner" />
+          <span>{directionProgress}</span>
+        </div>
+      )}
+
+      {pipelineStep === 'done' && composedRecord && (
+        <div style={{ marginTop: 'var(--sp-4)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', marginBottom: 'var(--sp-3)' }}>
+            <span style={{ fontWeight: 600 }}>方向动画生成完成</span>
+            <span style={{ fontSize: '12px', color: 'var(--text-3)' }}>{directionProgress}</span>
+          </div>
+          {composedRecord.image_url && (
+            <div
+              style={{ cursor: 'pointer', display: 'inline-block', borderRadius: 'var(--r-md)', overflow: 'hidden', border: '1px solid var(--border-1)' }}
+              onClick={() => setImageModalSrc(composedRecord.image_url!)}
+            >
+              <img
+                src={backendUrl(composedRecord.image_url)}
+                alt="Composed spritesheet"
+                style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', imageRendering: 'pixelated' }}
+              />
+            </div>
+          )}
+          <div style={{ marginTop: 'var(--sp-3)', display: 'flex', gap: 'var(--sp-2)' }}>
+            <button className="nq-btn nq-btn--accent nq-btn--lg"
+              onClick={() => setAddDialog({ recordId: composedRecord.id, name: '', tags: '' })}>
+              加入素材库
+            </button>
+            <button className="nq-btn nq-btn--lg" onClick={() => { setPipelineStep('idle'); setPipelineId(null); setComposedRecord(null); }}>
+              重新开始
+            </button>
+          </div>
+        </div>
+      )}
+
+      {records.length > 0 && pipelineStep === 'idle' && (
         <CandidateGrid records={records} optimizedPrompt={optimizedPrompt} selectedId={selectedId}
           onSelect={setSelectedId}
           onAddToLibrary={(id) => setAddDialog({ recordId: id, name: '', tags: '' })}
