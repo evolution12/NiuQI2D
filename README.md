@@ -4,6 +4,12 @@ NiuQI2D 是一个面向 2D 游戏素材生产的本地工具原型，目标是�
 
 项目当前由 React 前端和 FastAPI 后端组成。前端提供生成页、资产库、导出页和设置页；后端负责项目/风格/素材数据管理、图片上传、Prompt 优化、外部图像模型调用、后处理与导出。
 
+## 演示视频
+
+- 文件名：`demo演示.mp4`
+- 网盘链接：[https://pan.baidu.com/s/1E-lVSElJGVvVRuw9Lz4mUw?pwd=emnp](https://pan.baidu.com/s/1E-lVSElJGVvVRuw9Lz4mUw?pwd=emnp)
+- 提取码：`emnp`
+
 ## 功能概览
 
 - 素材生成：支持角色、Tile、道具、UI、特效等素材类型。
@@ -103,4 +109,3 @@ python -m unittest discover tests
 - `.tmp-*.png`
 - `*.db`
 - `frontend/dist-electron/`
-
