@@ -48,6 +48,9 @@ class GenerationService:
             style = await self.style_crud.get(self.session, style_id)
         self._validate_asset_subtype(body.asset_type, body.asset_subtype)
 
+        # Only support single action for now — multi-action generation comes later
+        effective_actions = (body.actions or ["idle"])[:1]
+
         reference_description = self._reference_description(style, body.reference_style_description)
         optimizer = PromptOptimizer(
             self.settings.text_api_provider,
@@ -60,7 +63,7 @@ class GenerationService:
             asset_subtype=body.asset_subtype,
             style=style,
             reference_style_description=reference_description,
-            actions=body.actions,
+            actions=effective_actions,
             direction_count=body.direction_count,
             frame_count=body.frame_count,
             terrain_type=body.terrain_type,
@@ -78,7 +81,7 @@ class GenerationService:
             mode=mode,
             candidate_count=body.candidate_count,
             transparent_background=body.transparent_background,
-            provider_size=self._provider_size_for_request(body),
+            provider_size=self._provider_size_for_request(body, effective_actions),
             seed=body.seed,
             reference_image_path=body.reference_image_path,
         )
@@ -93,7 +96,7 @@ class GenerationService:
                 body.target_size,
                 body.direction_count,
                 body.frame_count,
-                body.actions,
+                effective_actions,
                 body.terrain_type,
             )
         refreshed = [self._candidate_response(await self.generation_crud.get(self.session, record.id)) for record in records]
@@ -433,6 +436,7 @@ class GenerationService:
         frame_count: int,
         total_frames: int,
     ) -> dict[str, list[int]]:
+        direction_names = self._direction_names(direction_count)
         mapping: dict[str, list[int]] = {}
         index = 0
         for action in actions:
@@ -440,17 +444,26 @@ class GenerationService:
             for direction_index in range(direction_count):
                 frame_indexes = list(range(index, min(index + frame_count, total_frames)))
                 if frame_indexes:
-                    if direction_index == 0:
-                        mapping[action] = frame_indexes
+                    dir_name = direction_names[direction_index] if direction_index < len(direction_names) else str(direction_index)
+                    mapping[f"{action}_{dir_name}"] = frame_indexes
                     action_indexes.extend(frame_indexes)
                 index += frame_count
             if action_indexes:
                 mapping[f"{action}_all"] = action_indexes
         return mapping
 
-    def _provider_size_for_request(self, body: GenerateRequest) -> tuple[int, int]:
+    def _direction_names(self, direction_count: int) -> list[str]:
+        if direction_count == 1:
+            return ["down"]
+        if direction_count == 2:
+            return ["left", "right"]
+        if direction_count == 4:
+            return ["up", "down", "left", "right"]
+        return ["up", "up_right", "right", "down_right", "down", "down_left", "left", "up_left"]
+
+    def _provider_size_for_request(self, body: GenerateRequest, effective_actions: list[str] | None = None) -> tuple[int, int]:
         if body.asset_subtype == AssetSubtype.ANIMATED_SPRITESHEET:
-            actions = body.actions or ["idle"]
+            actions = effective_actions or body.actions or ["idle"]
             rows = max(1, body.direction_count * len(actions))
             cols = max(1, body.frame_count)
             return self._provider_size_for_grid(cols, rows)

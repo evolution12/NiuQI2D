@@ -17,25 +17,16 @@ MAX_PROMPT_CHARS = 4000
 TARGET_MAX_WORDS = 500
 
 SYSTEM_PROMPT = """
-You are a professional game art prompt engineer. Convert the user's short description into
-an accurate, stable, and controllable AI image generation prompt.
+You are a professional game art prompt engineer. Convert the user's description into a structured English prompt optimized for text-to-image generation models.
 
 Rules:
-1. Preserve the user's core intent.
-2. Inject professional keywords from the asset type template.
-3. Adjust visual language according to the style profile.
-4. If a reference style description is provided, blend its visual characteristics.
-5. Use a conservative minimal expansion strategy: only add technical details required for
-   generating the asset, and do not turn a short description into a new character, job,
-   story, scene, or equipment.
-6. Do not proactively add weapons, props, clothing, expressions, poses, backgrounds,
-   visual effects, or multiple subjects unless the user explicitly asked for them.
-7. Preserve key nouns, colors, counts, actions, and style words from the user's original
-   description.
-8. Prefer a single subject, clear composition, clean boundaries, and simple background;
-   avoid complex scenes and unnecessary decoration.
-9. Output English only.
-10. Do not output explanations, headings, markdown, or commentary. Output the prompt only.
+1. Output ONLY English. No Chinese.
+2. Use comma-separated keywords and short phrases, avoid long sentences.
+3. Preserve the user's core intent exactly.
+4. Use minimal expansion: only add technical terms necessary for asset generation.
+5. Do NOT invent new character identity, job, weapon, props, story, or scene.
+6. Emphasize: single subject, clear composition, clean edges, simple/no background.
+7. Output only the prompt text — no explanations, no titles, no Markdown.
 """.strip()
 
 
@@ -85,7 +76,30 @@ class PromptOptimizer:
             target_size,
             edge_rule,
         )
-        optimized_prompt = await self._optimize_with_provider(template_prompt)
+
+        # For sprite sheets: use the structured template directly — the LLM
+        # tends to lose grid/layout constraints during optimization.
+        # But first translate the user's Chinese description to English keywords.
+        # For other asset types: run through the LLM to refine the full prompt.
+        if template_used == "character_spritesheet":
+            english_desc = await self._translate_subject(cleaned_prompt)
+            final_prompt, _ = self._build_template_prompt(
+                english_desc,
+                asset_type,
+                asset_subtype,
+                style,
+                reference_style_description,
+                actions,
+                direction_count,
+                frame_count,
+                terrain_type,
+                target_size,
+                edge_rule,
+            )
+            optimized_prompt = final_prompt
+        else:
+            optimized_prompt = await self._optimize_with_provider(template_prompt)
+
         return OptimizedPrompt(
             prompt=self._trim_prompt(optimized_prompt),
             template_used=template_used,
@@ -122,16 +136,18 @@ class PromptOptimizer:
                     raise InvalidParamError("角色方向数必须为 1、2、4 或 8")
                 if frame_count < 1 or frame_count > 8:
                     raise InvalidParamError("动画帧数必须在 1 到 8 之间")
-                action_names = actions or ["idle"]
+                # Only use the first action for now — multi-action support comes later
+                action_name = (actions or ["idle"])[0]
                 return (
                     CHARACTER_SPRITESHEET_TEMPLATE.format(
                         style_keywords=style_keywords,
                         user_description=user_prompt,
                         perspective=perspective,
                         direction_count=direction_count,
-                        directions=", ".join(self._directions(direction_count)),
                         frame_count=frame_count,
-                        actions=", ".join(action_names),
+                        action_name=action_name,
+                        action_description=self._action_description(action_name),
+                        row_descriptions=self._build_row_descriptions(direction_count, action_name),
                         cell_width=width,
                         cell_height=height,
                         extra_style_keywords=extra_style_keywords,
@@ -201,8 +217,8 @@ class PromptOptimizer:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": template_prompt},
             ],
-            "temperature": 0.15,
-            "max_tokens": 800,
+            "temperature": 0.1,
+            "max_tokens": 1000,
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -260,10 +276,11 @@ class PromptOptimizer:
         if style and style.color_palette:
             parts.append(f"palette: {', '.join(style.color_palette)}")
         if style and style.extra_params:
-            parts.extend(f"{key}: {value}" for key, value in style.extra_params.items())
+            for key, value in style.extra_params.items():
+                parts.append(f"{key}: {value}")
         if reference_style_description:
             parts.append(f"reference style: {reference_style_description.strip()}")
-        return ", ".join(parts) if parts else "consistent visual style"
+        return ", ".join(parts) if parts else "consistent style"
 
     def _default_size(self, style: StyleProfile | None) -> tuple[int, int]:
         if style is None:
@@ -281,13 +298,94 @@ class PromptOptimizer:
         return labels[perspective]
 
     def _directions(self, direction_count: int) -> list[str]:
+        """Return direction names using 2D game convention (screen-space)."""
         if direction_count == 1:
-            return ["front"]
+            return ["down"]
         if direction_count == 2:
             return ["left", "right"]
         if direction_count == 4:
-            return ["front", "back", "left", "right"]
-        return ["front", "front-right", "right", "back-right", "back", "back-left", "left", "front-left"]
+            return ["up", "down", "left", "right"]
+        return ["up", "up-right", "right", "down-right", "down", "down-left", "left", "up-left"]
+
+    # Direction label map for row descriptions
+    _DIRECTION_LABELS: dict[str, str] = {
+        "down": "facing DOWN (toward the viewer, showing character's front)",
+        "up": "facing UP (away from the viewer, showing character's back)",
+        "left": "facing LEFT",
+        "right": "facing RIGHT",
+        "up-right": "facing UP-RIGHT (walking diagonally upper-right)",
+        "up-left": "facing UP-LEFT (walking diagonally upper-left)",
+        "down-right": "facing DOWN-RIGHT (walking diagonally lower-right)",
+        "down-left": "facing DOWN-LEFT (walking diagonally lower-left)",
+    }
+
+    def _build_row_descriptions(self, direction_count: int, action: str) -> str:
+        """Generate explicit per-row direction labels for the template."""
+        directions = self._directions(direction_count)
+        lines = []
+        for i, d in enumerate(directions):
+            label = self._DIRECTION_LABELS.get(d, d)
+            lines.append(f"Row {i + 1}: character {action} {label}")
+        return "\n".join(lines)
+
+    _ACTION_DESCRIPTIONS: dict[str, str] = {
+        "idle": "idle standing pose with subtle breathing/swaying animation",
+        "walk": "walk cycle animation showing natural leg alternation and arm swing",
+        "attack": "attack animation sequence with wind-up, strike, and recovery",
+        "hurt": "hurt/flinch reaction animation showing impact and stagger",
+        "die": "death animation showing collapse from standing to fallen",
+    }
+
+    def _action_description(self, action: str) -> str:
+        return self._ACTION_DESCRIPTIONS.get(action, f"{action} animation sequence")
+
+    async def _translate_subject(self, user_prompt: str) -> str:
+        """Translate user's Chinese description to concise English subject keywords.
+
+        This is used for sprite sheets where the full template goes directly
+        to the image API — we need the subject in English but don't want
+        the LLM to touch the structural layout constraints.
+        """
+        translate_prompt = (
+            f"Convert this game asset description to concise English keywords "
+            f"(3-8 words, comma-separated, describe the visual subject only).\n\n"
+            f"Description: {user_prompt}\n\n"
+            f"English keywords:"
+        )
+        payload: dict[str, Any] = {
+            "model": self.api_model,
+            "messages": [
+                {"role": "system", "content": "Output only English keywords. No explanations."},
+                {"role": "user", "content": translate_prompt},
+            ],
+            "temperature": 0.0,
+            "max_tokens": 60,
+        }
+        base_url = self._BASE_URLS.get(self.api_provider)
+        if not base_url:
+            return user_prompt
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+            if response.status_code >= 400:
+                return user_prompt
+            data = response.json()
+            content = data["choices"][0]["message"].get("content") or ""
+            # Strip quotes, newlines, explanations
+            content = content.strip().strip('"').strip("'")
+            # Take only the first line
+            content = content.split("\n")[0].strip()
+            return content if content else user_prompt
+        except Exception:
+            return user_prompt
 
     def _extra_param(self, style: StyleProfile | None, key: str, default: str) -> str:
         if style is None or not style.extra_params:

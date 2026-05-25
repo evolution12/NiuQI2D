@@ -62,6 +62,7 @@ class ApiClient {
       method,
       headers,
       body: processedBody,
+      cache: method === 'GET' ? 'no-store' : undefined,
     });
 
     if (!response.ok) {
@@ -123,11 +124,15 @@ export class ApiError extends Error {
 export const api = new ApiClient();
 
 /** 将 /images/... 等后端静态路径补全为完整 URL */
+let _urlCacheBust = Date.now();
+export function bustImageUrlCache(): void { _urlCacheBust = Date.now(); }
+
 export function backendUrl(path: string): string {
   if (!path || path.startsWith('http')) return path;
   // 从 api.baseUrl 提取 origin（去掉 /api/v1 部分）
   const base = api.baseUrl.replace(/\/api\/v1\/?$/, '');
-  return `${base}${path.startsWith('/') ? '' : '/'}${path}`;
+  const sep = path.includes('?') ? '&' : '?';
+  return `${base}${path.startsWith('/') ? '' : '/'}${path}${sep}_t=${_urlCacheBust}`;
 }
 
 // ============================================================

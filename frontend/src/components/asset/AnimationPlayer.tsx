@@ -1,6 +1,36 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { backendUrl } from '../../services/api';
 
+const ACTION_LABELS: Record<string, string> = {
+  idle: '待机',
+  walk: '行走',
+  attack: '攻击',
+  hurt: '受伤',
+  die: '死亡',
+};
+
+const DIR_LABELS: Record<string, string> = {
+  up: '上',
+  down: '下',
+  left: '左',
+  right: '右',
+  up_right: '右上',
+  up_left: '左上',
+  down_right: '右下',
+  down_left: '左下',
+};
+
+function formatActionLabel(key: string): string {
+  // "walk_up" → "行走·上", "walk_all" → "行走(全部)"
+  const parts = key.split('_');
+  const action = ACTION_LABELS[parts[0]] || parts[0];
+  if (parts.length === 1) return action;
+  const suffix = parts.slice(1).join('_');
+  if (suffix === 'all') return `${action}(全部)`;
+  const dir = DIR_LABELS[suffix] || suffix;
+  return `${action}·${dir}`;
+}
+
 interface AnimationPlayerProps {
   frames: string[];
   frameDelayMs: number;
@@ -141,7 +171,7 @@ export function AnimationPlayer({
                 setFrameIndex(0);
               }}
             >
-              {action}
+              {formatActionLabel(action)}
             </button>
           ))}
         </div>

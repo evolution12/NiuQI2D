@@ -1,33 +1,33 @@
 from __future__ import annotations
 
 CHARACTER_SPRITESHEET_TEMPLATE = """
-{style_keywords} sprite sheet of {user_description},
-preserve the user's subject exactly, do not invent extra character identity, job, weapon, props, story, or scene,
-{perspective} view, actions in row groups: {actions},
-for each action, create {direction_count} rows (one per direction: {directions}),
-{frame_count} columns per row ({frame_count} animation frames for that action and direction),
-total grid size is exactly actions times {direction_count} rows by {frame_count} columns,
-each cell is an isolated square frame, {cell_width}px x {cell_height}px,
-place one complete full-body character pose inside each cell, centered and fully visible,
-leave clear padding around the character inside every cell,
-head, feet, hands, weapon, tail, clothing, and silhouette must all stay inside the same cell,
-do not draw one large character spanning multiple cells,
-do not crop the character across cell boundaries,
-do not touch the cell edges,
-no camera-window effect, no sliding mask, no overlapping cells,
-clean grid layout, uniform cell size, clean outlines,
-transparent or plain empty background in each cell, no background scene elements,
-single subject per cell, no text, no logo, no UI, no decorative effects unless the user asked for them,
-game asset style,
-{extra_style_keywords}
+{style_keywords} sprite sheet, {user_description},
+{perspective} view, {action_description},
+EXACT grid layout: {direction_count} rows × {frame_count} columns,
+each cell exactly {cell_width}px × {cell_height}px, uniform square cells,
+{row_descriptions},
+each row has {frame_count} sequential frames forming a seamless looping {action_name} animation,
+progressive body movement across frames, last frame loops smoothly back to frame 1,
+one complete full-body character per cell, centered, even padding on all sides,
+all body parts stay inside the cell, no cropping at cell boundaries,
+fully transparent background alpha=0 in every cell, no ground plane no shadow no scenery,
+if transparency not possible then solid pure white #FFFFFF background no texture,
+clean outlines, uniform grid, game-ready sprite asset, single subject per cell,
+{extra_style_keywords},
+NO merged cells, NO overlapping cells, NO character spanning multiple cells,
+NO cropping at edges, NO text, NO logo, NO watermark, NO UI elements,
+NO background scene, NO gradient, NO pattern, NO extra characters,
+NO decorative effects, NO out-of-grid elements, NO borders between cells
 """.strip()
 
 CHARACTER_STATIC_TEMPLATE = """
-{style_keywords} character sprite of {user_description},
-preserve the user's subject exactly, do not invent extra character identity, job, weapon, props, story, or scene,
+{style_keywords} character sprite, {user_description},
 {perspective} view, centered composition, clean outlines,
-{cell_width}px x {cell_height}px, game asset style,
-no background elements, single pose, single subject, no text, no logo, no UI,
-no decorative effects, extra props, complex clothing, or environment details unless the user asked for them,
-{extra_style_keywords}
+single pose, {cell_width}px × {cell_height}px,
+fully transparent background alpha=0, no background elements no ground no shadow,
+if transparency not possible then solid pure white #FFFFFF background no texture,
+game-ready asset, single subject,
+{extra_style_keywords},
+NO text, NO logo, NO watermark, NO UI elements,
+NO background scene, NO extra characters, NO decorative effects
 """.strip()

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../stores/appStore';
-import { assetApi, generationApi } from '../services/api';
+import { assetApi, generationApi, bustImageUrlCache } from '../services/api';
 import { toast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { EmptyState } from '../components/common/EmptyState';
@@ -45,6 +45,7 @@ export function AssetLibraryPage() {
   const handleSearch = (v: string) => { setSearch(v); if (timerRef.current) clearTimeout(timerRef.current); timerRef.current = window.setTimeout(() => setPage(1), 300); };
   const handleDetail = async (id: string) => {
     setDetailId(id);
+    bustImageUrlCache();
     try {
       const a = await assetApi.get(id);
       const recs = await generationApi.listRecords(a.project_id);
