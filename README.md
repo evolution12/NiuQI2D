@@ -145,6 +145,81 @@ npm run electron:build
 
 输出: `release/` 目录下的 NSIS 安装包（Windows x64）。
 
+- **`NiuQI2D Setup x.x.x.exe`** — NSIS 安装程序，分发给用户使用
+- **`win-unpacked/`** — 免安装绿色版，可直接运行
+
+## 打包常见问题
+
+### npm install 网络超时（ECONNRESET）
+
+国内网络不稳定时可能失败，使用淘宝镜像：
+
+```bash
+npm install --registry=https://registry.npmmirror.com
+```
+
+### electron-builder 下载 Electron 二进制包超时
+
+从 GitHub 下载 Electron 时网络不通，设置镜像：
+
+```powershell
+# PowerShell
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+```
+
+```bash
+# CMD
+set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+```
+
+### electron-builder 下载 NSIS 等构建工具超时
+
+打包最后阶段需要下载 NSIS、winCodeSign 等工具，同样需要设置镜像：
+
+```powershell
+# PowerShell
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://registry.npmmirror.com/-/binary/electron-builder-binaries/"
+```
+
+备选镜像：
+
+```powershell
+# 华为云
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://mirrors.huaweicloud.com/electron-builder-binaries/"
+# 清华
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/electron-builder-binaries/"
+```
+
+### 完整打包命令（含镜像设置）
+
+```powershell
+# PowerShell — 一次性设置所有镜像
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://registry.npmmirror.com/-/binary/electron-builder-binaries/"
+npm run electron:build
+```
+
+### PyInstaller 未安装
+
+后端打包报 `No module named PyInstaller`，在虚拟环境中安装：
+
+```bash
+cd python
+.venv\Scripts\activate
+pip install pyinstaller
+python build_exe.py
+```
+
+### release 目录被占用，打包失败
+
+`remove app.asar: The process cannot access the file` — 上次打包的文件被锁定。关闭所有可能占用的进程（资源管理器、终端、IDE）后删除 `release` 目录重试：
+
+```powershell
+Remove-Item -Recurse -Force E:\Code\NiuQI2D\release
+Remove-Item -Recurse -Force E:\Code\NiuQI2D\frontend\dist-electron
+npm run electron:build
+```
+
 ## 环境变量
 
 后端支持以下环境变量（可选，优先级高于配置文件）：

@@ -43,8 +43,8 @@ export function GeneratePage() {
 
   // Quality pipeline state
   const [pipelineStep, setPipelineStep] = useState<PipelineStep>('idle');
-  const [pipelineId, setPipelineId] = useState<string | null>(null);
-  const [baseRecordId, setBaseRecordId] = useState<string | null>(null);
+  const [, setPipelineId] = useState<string | null>(null);
+  const [, setBaseRecordId] = useState<string | null>(null);
   const [directionProgress, setDirectionProgress] = useState<string>('');
   const [composedRecord, setComposedRecord] = useState<GenerationRecord | null>(null);
 

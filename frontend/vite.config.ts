@@ -16,7 +16,7 @@ export default defineConfig({
               entry: path.resolve(__dirname, '../electron/main.ts'),
               vite: {
                 build: {
-                  outDir: path.resolve(__dirname, '../dist-electron'),
+                  outDir: path.resolve(__dirname, 'dist-electron'),
                 },
               },
             },
@@ -27,7 +27,7 @@ export default defineConfig({
               },
               vite: {
                 build: {
-                  outDir: path.resolve(__dirname, '../dist-electron'),
+                  outDir: path.resolve(__dirname, 'dist-electron'),
                   lib: {
                     entry: path.resolve(__dirname, '../electron/preload.ts'),
                     formats: ['cjs'],

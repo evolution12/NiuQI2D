@@ -22,6 +22,7 @@ export function PathSelector({ value, onChange }: PathSelectorProps) {
     } catch {
       // Fallback to browser File System Access API
       try {
+        // @ts-expect-error File System Access API not in all TS libs
         const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
         onChange(dirHandle.name);
       } catch {

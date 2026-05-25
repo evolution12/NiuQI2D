@@ -1,4 +1,5 @@
 """Build the NiuQI2D backend as a standalone executable using PyInstaller."""
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,7 +26,7 @@ def main() -> None:
         "--hidden-import", "uvicorn.lifespan.on",
         "--hidden-import", "aiosqlite",
         # Bundle preset styles data
-        "--add-data", f"fastapi_app{Path.sep}data{Path.pathsep}fastapi_app{Path.sep}data",
+        "--add-data", f"fastapi_app{os.sep}data{os.pathsep}fastapi_app{os.sep}data",
         # Entry point
         str(ROOT / "fastapi_app" / "__main__.py"),
     ]
