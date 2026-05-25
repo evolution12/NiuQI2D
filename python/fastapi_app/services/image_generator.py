@@ -13,10 +13,10 @@ from ..providers.openai_provider import OpenAIProvider
 from ..schemas import GenerationRecordCreateRequest
 from ..storage import StorageManager
 
-PREVIEW_MIN_CANDIDATES = 4
-PREVIEW_MAX_CANDIDATES = 6
-QUALITY_MIN_CANDIDATES = 2
-QUALITY_MAX_CANDIDATES = 3
+PREVIEW_MIN_CANDIDATES = 1
+PREVIEW_MAX_CANDIDATES = 1
+QUALITY_MIN_CANDIDATES = 1
+QUALITY_MAX_CANDIDATES = 1
 DEFAULT_PROVIDER_IMAGE_SIZE = (1024, 1024)
 
 
@@ -95,13 +95,17 @@ class ImageGenerator:
     ) -> ImageGenerationResult:
         selected_count = self._candidate_count(mode, candidate_count)
         provider = self._build_provider(mode)
-        images = await provider.generate(
-            prompt=optimized_prompt,
-            size=provider_size,
-            n=selected_count,
-            transparent_background=transparent_background,
-            seed=seed,
-        )
+        # Always call n=1 per request; loop to get multiple candidates
+        images: list[GeneratedImage] = []
+        for _ in range(selected_count):
+            batch = await provider.generate(
+                prompt=optimized_prompt,
+                size=provider_size,
+                n=1,
+                transparent_background=transparent_background,
+                seed=seed,
+            )
+            images.extend(batch)
         cost_estimate = provider.estimate_cost(n=len(images), size=provider_size)
         records = await self._persist_images(
             project_id=project_id,
