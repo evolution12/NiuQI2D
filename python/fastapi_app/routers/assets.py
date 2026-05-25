@@ -194,7 +194,7 @@ def _animation_frames_from_asset(storage: object, asset: Asset) -> tuple[list[st
 
     manifest = _read_animation_manifest(storage, source_path)
     if manifest is not None:
-        frames = manifest.get("preview_frames") or manifest.get("frames", [])
+        frames = manifest.get("frames") or manifest.get("preview_frames", [])
         actions = manifest.get("actions", {})
         frame_delay_ms = manifest.get("frame_delay_ms", 120)
         return (
