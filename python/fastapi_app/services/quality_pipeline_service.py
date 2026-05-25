@@ -29,6 +29,25 @@ from ..storage import StorageManager
 
 logger = logging.getLogger(__name__)
 
+# In-memory progress tracker for quality pipeline direction generation.
+# Key: pipeline_id, Value: dict with progress info.
+_pipeline_progress: dict[str, dict[str, Any]] = {}
+
+
+def set_pipeline_progress(pipeline_id: str, data: dict[str, Any]) -> None:
+    """Update progress for a pipeline."""
+    _pipeline_progress[pipeline_id] = data
+
+
+def get_pipeline_progress(pipeline_id: str) -> dict[str, Any] | None:
+    """Get current progress for a pipeline."""
+    return _pipeline_progress.get(pipeline_id)
+
+
+def clear_pipeline_progress(pipeline_id: str) -> None:
+    """Remove progress entry after completion."""
+    _pipeline_progress.pop(pipeline_id, None)
+
 
 class QualityPipelineService:
     def __init__(self, session: AsyncSession, storage: StorageManager) -> None:
@@ -108,7 +127,7 @@ class QualityPipelineService:
     # Step 2+3: Per-direction generation + composition
     # ------------------------------------------------------------------
 
-    async def generate_directions(
+    async def generate_directions_stream(
         self,
         base_record_id: str,
         direction_count: int,
@@ -116,60 +135,63 @@ class QualityPipelineService:
         actions: list[str],
         target_size: tuple[int, int],
         seed: str | None = None,
-    ) -> dict[str, Any]:
-        """Generate per-direction animation rows, compose into final spritesheet."""
+    ):
+        """Async generator that yields progress events then the final result.
 
-        print(f"[Pipeline] generate_directions called: base_record_id={base_record_id}, "
-              f"direction_count={direction_count}, frame_count={frame_count}, "
-              f"actions={actions}, target_size={target_size}")
+        Yields JSON-lines: {"type": "progress", "current": 1, "total": 4, ...}
+        Final line:       {"type": "done", "composed_record_id": "...", ...}
+        """
+        import json
 
         base_record = await self.generation_crud.get(self.session, base_record_id)
         raw_image_path = base_record.api_params.get("raw_image_path")
-        print(f"[Pipeline] base_record: project_id={base_record.project_id}, "
-              f"raw_image_path={raw_image_path}, api_params_keys={list(base_record.api_params.keys())}")
         if not raw_image_path:
-            raise InvalidParamError("基座图记录缺少原始图片路径")
+            yield json.dumps({"type": "error", "message": "基座图记录缺少原始图片路径"}, ensure_ascii=False)
+            return
 
         project_id = base_record.project_id
         if not project_id:
-            raise InvalidParamError("基座图记录缺少项目 ID")
+            yield json.dumps({"type": "error", "message": "基座图记录缺少项目 ID"}, ensure_ascii=False)
+            return
 
-        # Load base image bytes for reference
         base_image_bytes = await self.storage.get_image(raw_image_path)
-        print(f"[Pipeline] base_image_bytes loaded: {len(base_image_bytes)} bytes")
 
-        # Prepare optimizer for direction row prompts
         optimizer = PromptOptimizer(
             self.settings.text_api_provider,
             self.settings.text_api_key,
             self.settings.text_api_model,
         )
 
-        # Load style info
         from ..crud.style import StyleCRUD
         style_crud = StyleCRUD()
         style = await style_crud.get(self.session, base_record.style_id) if base_record.style_id else None
 
         direction_names = self._direction_names(direction_count)
         provider_size = self._provider_size_for_row(frame_count, target_size)
-        print(f"[Pipeline] direction_names={direction_names}, provider_size={provider_size}")
 
         generator = ImageGenerator(self.session, self.storage, self.settings)
         pipeline_id = base_record.api_params.get("pipeline_id", str(uuid.uuid4()))
 
-        # Step 2: Generate each direction row
         direction_results: list[dict[str, Any]] = []
-        direction_rows: list[tuple[str, Image.Image]] = []  # (direction_name, row_image)
+        direction_rows: list[tuple[str, Image.Image]] = []
+        total_directions = len(direction_names) * len(actions[:1])
+        completed = 0
 
-        for action in actions[:1]:  # Single action for now
-            # Pre-generate unified action details so all directions share the same motion
+        for action in actions[:1]:
             action_details = await optimizer.generate_action_details(
                 character_description=base_record.user_prompt,
                 action=action,
             )
-            print(f"[Pipeline] action_details for '{action}': {action_details!r}")
 
             for i, direction in enumerate(direction_names):
+                yield json.dumps({
+                    "type": "progress",
+                    "current": completed + 1,
+                    "total": total_directions,
+                    "direction": f"{action}_{direction}",
+                    "message": f"正在生成方向 {completed + 1}/{total_directions}: {direction}",
+                }, ensure_ascii=False)
+
                 try:
                     dir_prompt = optimizer.optimize_direction_row(
                         direction=direction,
@@ -179,9 +201,6 @@ class QualityPipelineService:
                         style=style,
                     )
 
-                    print(f"\n{'='*60}\n[DIRECTION PROMPT] {action}_{direction}:\n{'='*60}\n{dir_prompt.prompt}\n{'='*60}\n")
-
-                    # Generate with base image as reference
                     provider = generator._build_provider(GenerationMode.QUALITY)
                     images = await provider.generate_with_reference(
                         prompt=dir_prompt.prompt,
@@ -194,9 +213,9 @@ class QualityPipelineService:
 
                     if not images:
                         direction_results.append({"direction": f"{action}_{direction}", "status": "failed", "record_id": None})
+                        completed += 1
                         continue
 
-                    # Save the generated row image
                     img = images[0]
                     row_record = await self._save_direction_record(
                         project_id=project_id,
@@ -211,7 +230,6 @@ class QualityPipelineService:
                         frame_count=frame_count,
                     )
 
-                    # Load the row image for composition
                     row_record_data = await self.generation_crud.get(self.session, row_record)
                     row_path = row_record_data.api_params.get("raw_image_path")
                     row_bytes = await self.storage.get_image(row_path)
@@ -223,18 +241,16 @@ class QualityPipelineService:
                         "status": "success",
                         "record_id": row_record,
                     })
+                    completed += 1
                 except Exception as exc:
-                    logger.error(
-                        "方向 %s 生成失败: %s", f"{action}_{direction}", exc,
-                        exc_info=True,
-                    )
-                    print(f"[Pipeline] 方向 {action}_{direction} 生成失败: {exc}")
+                    logger.error("方向 %s 生成失败: %s", f"{action}_{direction}", exc, exc_info=True)
                     direction_results.append({
                         "direction": f"{action}_{direction}",
                         "status": "failed",
                         "record_id": None,
                         "error": str(exc),
                     })
+                    completed += 1
 
         if not direction_rows:
             errors = "; ".join(
@@ -242,12 +258,11 @@ class QualityPipelineService:
                 for r in direction_results
                 if r["status"] == "failed"
             )
-            raise InvalidParamError(f"所有方向生成均失败 — {errors}")
+            yield json.dumps({"type": "error", "message": f"所有方向生成均失败 — {errors}"}, ensure_ascii=False)
+            return
 
-        # Step 3: Compose spritesheet
+        # Compose spritesheet
         spritesheet = self._compose_spritesheet(direction_rows, frame_count, target_size)
-
-        # Save the composed spritesheet as a raw image and create a generation record
         spritesheet_bytes = self._png_bytes(spritesheet)
         composed_record = await self.generation_crud.create(
             self.session,
@@ -288,7 +303,6 @@ class QualityPipelineService:
             },
         )
 
-        # Post-process the composed spritesheet
         manifest = await self._postprocess_and_save(
             spritesheet=spritesheet,
             project_id=project_id,
@@ -300,12 +314,13 @@ class QualityPipelineService:
             style=style,
         )
 
-        return {
+        yield json.dumps({
+            "type": "done",
             "composed_record_id": composed_record.id,
             "pipeline_id": pipeline_id,
             "direction_results": direction_results,
             "manifest": manifest,
-        }
+        }, ensure_ascii=False)
 
     # ------------------------------------------------------------------
     # Internal helpers

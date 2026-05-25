@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..crud.generation import GenerationCRUD
@@ -19,7 +20,10 @@ from ..schemas import (
 )
 from ..services.generation_service import GenerationService
 from ..crud.style import StyleCRUD
-from ..services.quality_pipeline_service import QualityPipelineService
+from ..services.quality_pipeline_service import (
+    QualityPipelineService,
+    get_pipeline_progress,
+)
 
 router = APIRouter(tags=["generation"])
 
@@ -162,31 +166,39 @@ async def quality_pipeline_base(
     )
 
 
-@router.post("/generate/quality-pipeline/directions", response_model=QualityPipelineDirectionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/generate/quality-pipeline/directions")
 async def quality_pipeline_directions(
     body: QualityPipelineDirectionRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
-) -> QualityPipelineDirectionResponse:
-    """Step 2+3: Generate per-direction rows and compose final spritesheet."""
-    print(f"[Endpoint] directions request received: {body.model_dump()}")
+):
+    """Step 2+3: Stream per-direction progress, then final result."""
     service = QualityPipelineService(session, request.app.state.storage)
-    print("[Endpoint] service created, calling generate_directions...")
-    result = await service.generate_directions(
-        base_record_id=body.base_record_id,
-        direction_count=body.direction_count,
-        frame_count=body.frame_count,
-        actions=body.actions or ["idle"],
-        target_size=body.target_size,
-        seed=body.seed,
+
+    async def event_stream():
+        async for line in service.generate_directions_stream(
+            base_record_id=body.base_record_id,
+            direction_count=body.direction_count,
+            frame_count=body.frame_count,
+            actions=body.actions or ["idle"],
+            target_size=body.target_size,
+            seed=body.seed,
+        ):
+            yield line + "\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="application/x-ndjson",
     )
-    print(f"[Endpoint] generate_directions returned: composed_record_id={result.get('composed_record_id')}")
-    return QualityPipelineDirectionResponse(
-        composed_record_id=result["composed_record_id"],
-        pipeline_id=result["pipeline_id"],
-        direction_results=result["direction_results"],
-        manifest=result["manifest"],
-    )
+
+
+@router.get("/generate/quality-pipeline/progress/{pipeline_id}")
+async def quality_pipeline_progress(pipeline_id: str) -> dict:
+    """Get real-time progress for a quality pipeline direction generation."""
+    progress = get_pipeline_progress(pipeline_id)
+    if progress is None:
+        return {"status": "not_found", "current": 0, "total": 0, "message": "无进度信息"}
+    return progress
 
 
 def _candidate_response(record) -> GenerationCandidateResponse:
