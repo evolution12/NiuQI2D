@@ -6,6 +6,7 @@ NiuQI2D 是一个面向 2D 游戏素材生产的本地工具原型，目标是�
 
 ## 演示视频
 
+- 在线查看：[NiuQi2D 项目演示 demo](https://www.bilibili.com/video/BV1DGGo6yE1d?vd_source=1bc5876eae824c11d5eb50d62ee61eee)
 - 文件名：`demo演示.mp4`
 - 网盘链接：[https://pan.baidu.com/s/1E-lVSElJGVvVRuw9Lz4mUw?pwd=emnp](https://pan.baidu.com/s/1E-lVSElJGVvVRuw9Lz4mUw?pwd=emnp)
 - 提取码：`emnp`
