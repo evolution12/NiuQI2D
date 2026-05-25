@@ -45,8 +45,16 @@
       "output": "../release"
     },
     "files": [
-      "dist/**/*",
-      "dist-electron/**/*"
+      {
+        "from": "dist",
+        "to": "dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "dist-electron",
+        "to": "dist-electron",
+        "filter": ["**/*"]
+      }
     ],
     "extraResources": [
       {

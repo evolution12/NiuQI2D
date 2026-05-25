@@ -36,10 +36,17 @@ class ApiClient {
 
     const electronAPI = (window as any).electronAPI;
     if (electronAPI?.python?.getPort) {
-      const port = await electronAPI.python.getPort();
+      // Wait for Python backend to be ready (port may be null initially)
+      let port = await electronAPI.python.getPort();
+      const deadline = Date.now() + 30000; // wait up to 30s
+      while (!port && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 500));
+        port = await electronAPI.python.getPort();
+      }
+      if (!port) throw new Error('Python backend failed to start');
       this.baseUrl = `http://127.0.0.1:${port}/api/v1`;
     } else {
-      // 开发模式 fallback（无 Electron 时直接连 localhost:8000）
+      // Fallback for non-Electron mode
       this.baseUrl = 'http://127.0.0.1:8000/api/v1';
     }
   }
@@ -132,8 +139,8 @@ export function bustImageUrlCache(): void { _urlCacheBust = Date.now(); }
 
 export function backendUrl(path: string): string {
   if (!path || path.startsWith('http')) return path;
-  // 从 api.baseUrl 提取 origin（去掉 /api/v1 部分）
-  const base = api.baseUrl.replace(/\/api\/v1\/?$/, '');
+  // Use api.baseUrl if available, otherwise fall back to default
+  const base = (api.baseUrl || 'http://127.0.0.1:8000').replace(/\/api\/v1\/?$/, '');
   const sep = path.includes('?') ? '&' : '?';
   return `${base}${path.startsWith('/') ? '' : '/'}${path}${sep}_t=${_urlCacheBust}`;
 }

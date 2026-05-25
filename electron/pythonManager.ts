@@ -29,7 +29,7 @@ function findPythonExe(): { cmd: string; args: string[] } {
     }
   }
   // Dev: use venv python
-  const venvPython = path.resolve(__dirname, '../python/.venv/Scripts/python.exe')
+  const venvPython = path.resolve(__dirname, '../../python/.venv/Scripts/python.exe')
   return {
     cmd: venvPython,
     args: ['-m', 'fastapi_app'],
@@ -54,7 +54,9 @@ export async function startPython(port: number): Promise<void> {
 
   pythonProcess = spawn(cmd, fullArgs, {
     env,
-    cwd: path.resolve(__dirname, '../python'),
+    cwd: app.isPackaged
+      ? path.dirname(cmd) // packaged: use the exe's own directory
+      : path.resolve(__dirname, '../../python'), // dev: use python source dir
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })

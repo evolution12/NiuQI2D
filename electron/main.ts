@@ -80,6 +80,8 @@ app.on('before-quit', async () => {
 })
 
 app.whenReady().then(async () => {
+  createWindow()
+
   try {
     pythonPort = await getFreePort()
     console.log(`[Main] Starting Python on port ${pythonPort}`)
@@ -87,9 +89,9 @@ app.whenReady().then(async () => {
     await waitForReady(pythonPort)
     pythonReady = true
     console.log('[Main] Python backend is ready')
+    // Notify renderer that backend is ready
+    mainWindow?.webContents.send('python:ready', pythonPort)
   } catch (err) {
     console.error('[Main] Failed to start Python backend:', err)
   }
-
-  createWindow()
 })
