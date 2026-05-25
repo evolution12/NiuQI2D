@@ -177,8 +177,63 @@ export const generationApi = {
   // Quality pipeline
   qualityPipelineBase: (req: GenerateRequest) =>
     api.post<QualityPipelineBaseResponse>('/generate/quality-pipeline/base', req),
-  qualityPipelineDirections: (req: QualityPipelineDirectionRequest) =>
-    api.post<QualityPipelineDirectionResponse>('/generate/quality-pipeline/directions', req),
+  /**
+   * Stream direction generation. Calls onProgress for each step, onDone/onError at end.
+   */
+  qualityPipelineDirectionsStream: async (
+    req: QualityPipelineDirectionRequest,
+    onProgress: (data: { current: number; total: number; direction: string; message: string }) => void,
+    onDone: (data: QualityPipelineDirectionResponse) => void,
+    onError: (msg: string) => void,
+  ) => {
+    await api.ensureReady();
+    const response = await fetch(`${api.baseUrl}/generate/quality-pipeline/directions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!response.ok || !response.body) {
+      const text = await response.text().catch(() => '请求失败');
+      onError(text);
+      return;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalResult: QualityPipelineDirectionResponse | null = null;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const data = JSON.parse(line);
+          if (data.type === 'progress') {
+            onProgress({ current: data.current, total: data.total, direction: data.direction, message: data.message });
+          } else if (data.type === 'done') {
+            finalResult = data as QualityPipelineDirectionResponse;
+          } else if (data.type === 'error') {
+            onError(data.message);
+            return;
+          }
+        } catch {
+          // ignore malformed lines
+        }
+      }
+    }
+    if (buffer.trim()) {
+      try {
+        const data = JSON.parse(buffer.trim());
+        if (data.type === 'done') finalResult = data as QualityPipelineDirectionResponse;
+        else if (data.type === 'error') { onError(data.message); return; }
+      } catch { /* ignore */ }
+    }
+    if (finalResult) onDone(finalResult);
+    else onError('未收到生成结果');
+  },
 };
 
 // --- Assets ---

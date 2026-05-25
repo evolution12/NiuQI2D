@@ -86,33 +86,38 @@ export function GeneratePage() {
     setBaseRecordId(selectedId);
     setPipelineStep('generating_directions');
     setGenerating(true);
-    setDirectionProgress('正在生成方向动画...');
+    setDirectionProgress('准备生成方向动画...');
 
-    try {
-      const r = await generationApi.qualityPipelineDirections({
+    await generationApi.qualityPipelineDirectionsStream(
+      {
         base_record_id: selectedId,
         direction_count: params.direction_count,
         frame_count: params.frame_count,
         actions: params.actions,
         target_size: params.target_size,
-      });
-      const successCount = r.direction_results.filter((d) => d.status === 'success').length;
-      const totalCount = r.direction_results.length;
-      setDirectionProgress(`方向生成完成: ${successCount}/${totalCount} 成功`);
-      setPipelineStep('done');
+      },
+      (progress) => {
+        setDirectionProgress(`${progress.current}/${progress.total} ${progress.message}`);
+      },
+      async (result) => {
+        const successCount = result.direction_results.filter((d: any) => d.status === 'success').length;
+        const totalCount = result.direction_results.length;
+        setDirectionProgress(`方向生成完成: ${successCount}/${totalCount} 成功`);
+        setPipelineStep('done');
 
-      // Fetch the composed record so we can display it and add to library
-      const record = await generationApi.getRecord(r.composed_record_id);
-      setComposedRecord(record);
-      setGenerationSession({ records: [record], optimizedPrompt: '', selectedId: record.id });
+        const record = await generationApi.getRecord(result.composed_record_id);
+        setComposedRecord(record);
+        setGenerationSession({ records: [record], optimizedPrompt: '', selectedId: record.id });
 
-      toast.success(`方向动画已生成 (${successCount}/${totalCount})`);
-    } catch (e: any) {
-      toast.error('方向生成失败: ' + (e.message ?? '未知错误'));
-      setPipelineStep('base_select');
-    } finally {
-      setGenerating(false);
-    }
+        toast.success(`方向动画已生成 (${successCount}/${totalCount})`);
+        setGenerating(false);
+      },
+      (errMsg) => {
+        toast.error('方向生成失败: ' + errMsg);
+        setPipelineStep('base_select');
+        setGenerating(false);
+      },
+    );
   }, [selectedId, currentProject, params]);
 
   const handleAddToLibrary = async () => {
@@ -191,30 +196,34 @@ export function GeneratePage() {
         </div>
       </div>
 
-      {records.length > 0 && pipelineStep === 'base_select' && (
-        <div style={{ marginTop: 'var(--sp-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', marginBottom: 'var(--sp-3)' }}>
-            <span style={{ fontWeight: 600 }}>选择基座图</span>
-            <span style={{ fontSize: '12px', color: 'var(--text-3)' }}>选择一个作为方向动画生成的参考基座</span>
-          </div>
-          <CandidateGrid records={records} optimizedPrompt={optimizedPrompt} selectedId={selectedId}
-            onSelect={setSelectedId}
-            onAddToLibrary={() => {}}
-            onRetry={() => handleGenerate(false)} onVariant={handleVariant}
-          />
-          <div style={{ marginTop: 'var(--sp-3)', display: 'flex', gap: 'var(--sp-2)' }}>
-            <button className="nq-btn nq-btn--accent nq-btn--lg" disabled={!selectedId || generating}
-              onClick={handleSelectBase}>
-              {generating ? (
-                <>
-                  <span className="spinner" />
-                  <span>生成中...</span>
-                </>
-              ) : '以此为基础生成方向动画'}
-            </button>
-            <button className="nq-btn nq-btn--lg" onClick={() => { setPipelineStep('idle'); setPipelineId(null); }}>
-              重新生成基座图
-            </button>
+      {/* Base selection modal — must select before leaving */}
+      {pipelineStep === 'base_select' && records.length > 0 && (
+        <div className="modal-overlay">
+          <div className="modal-panel" style={{ minWidth: '700px', maxWidth: '900px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <span className="modal-title">选择基座图</span>
+            </div>
+            <div className="modal-body" style={{ overflowY: 'auto' }}>
+              <div style={{ marginBottom: 'var(--sp-3)', fontSize: '13px', color: 'var(--text-2)' }}>
+                请选择一张作为方向动画生成的参考基座，所有方向将基于该角色的外观、颜色和比例生成。
+              </div>
+              <CandidateGrid records={records} optimizedPrompt={optimizedPrompt} selectedId={selectedId}
+                onSelect={setSelectedId}
+                onAddToLibrary={() => {}}
+                onRetry={() => handleGenerate(false)} onVariant={handleVariant}
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="nq-btn nq-btn--sm" onClick={() => { setPipelineStep('idle'); setPipelineId(null); setGenerationSession(null); }}>取消</button>
+              <button className="nq-btn nq-btn--sm nq-btn--accent" disabled={!selectedId || generating} onClick={handleSelectBase}>
+                {generating ? (
+                  <>
+                    <span className="spinner spinner--sm" />
+                    <span>生成中...</span>
+                  </>
+                ) : '以此为基础生成方向动画'}
+              </button>
+            </div>
           </div>
         </div>
       )}
