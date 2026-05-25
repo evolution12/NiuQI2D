@@ -15,11 +15,18 @@ dist
 dist-ssr
 *.local
 
+# Electron
+dist-electron/
+release/
+
 # Python
 __pycache__/
 *.pyc
 .venv/
 venv/
+python/dist/
+python/build/
+*.spec
 
 # Editor directories and files
 .vscode/*
