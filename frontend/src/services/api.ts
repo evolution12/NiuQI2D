@@ -11,6 +11,9 @@ import type {
   GenerationRecord,
   Project,
   ProjectDetail,
+  QualityPipelineBaseResponse,
+  QualityPipelineDirectionRequest,
+  QualityPipelineDirectionResponse,
   SelectRecordRequest,
   SettingsResponse,
   StyleProfile,
@@ -170,6 +173,12 @@ export const generationApi = {
   selectRecord: (id: string, req: SelectRecordRequest) => api.post<{ asset: Asset }>(`/generation/${id}/select`, req),
   reproduce: (id: string) => api.post<{ records: GenerationRecord[]; optimized_prompt: string }>(`/generation/${id}/reproduce`),
   variant: (id: string, req: Partial<GenerateRequest>) => api.post<{ records: GenerationRecord[]; optimized_prompt: string }>(`/generation/${id}/variant`, req),
+
+  // Quality pipeline
+  qualityPipelineBase: (req: GenerateRequest) =>
+    api.post<QualityPipelineBaseResponse>('/generate/quality-pipeline/base', req),
+  qualityPipelineDirections: (req: QualityPipelineDirectionRequest) =>
+    api.post<QualityPipelineDirectionResponse>('/generate/quality-pipeline/directions', req),
 };
 
 // --- Assets ---

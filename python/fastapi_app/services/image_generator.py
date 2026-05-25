@@ -164,6 +164,7 @@ class ImageGenerator:
                     api_model=provider.model,
                     api_params={
                         "mode": mode.value,
+                        "project_id": project_id,
                         "candidate_index": index,
                         "provider_size": {"w": image.size[0], "h": image.size[1]},
                         "transparent_background": transparent_background,

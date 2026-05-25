@@ -8,7 +8,12 @@ import httpx
 
 from ..exceptions import ApiCallFailedError, ApiKeyInvalidError, GenerationTimeoutError, InvalidParamError
 from ..models import ArtStyle, AssetSubtype, AssetType, Perspective, StyleProfile
-from ..templates.character_prompt import CHARACTER_SPRITESHEET_TEMPLATE, CHARACTER_STATIC_TEMPLATE
+from ..templates.character_prompt import (
+    CHARACTER_BASE_IMAGE_TEMPLATE,
+    CHARACTER_DIRECTION_ROW_TEMPLATE,
+    CHARACTER_SPRITESHEET_TEMPLATE,
+    CHARACTER_STATIC_TEMPLATE,
+)
 from ..templates.map_prompt import MAP_TEMPLATE
 from ..templates.tile_prompt import TILE_TEMPLATE
 
@@ -319,6 +324,56 @@ class PromptOptimizer:
         "down-left": "facing DOWN-LEFT (walking diagonally lower-left)",
     }
 
+    # Detailed orientation descriptions for direction-row generation
+    _DIRECTION_ORIENTATIONS: dict[str, str] = {
+        "down": (
+            "Front view — the character faces TOWARD the viewer. "
+            "Face, chest, and front of the body are FULLY visible. "
+            "You CAN see the eyes, mouth, and front details. "
+            "This is the character's FRONT — NOT the back."
+        ),
+        "up": (
+            "Back view — the character faces AWAY from the viewer. "
+            "Back, back of the head, and rear of the body are FULLY visible. "
+            "You CANNOT see the face, eyes, or front of the body. "
+            "This is the character's BACK — NOT the front."
+        ),
+        "left": (
+            "Side view — the character is MOVING to the LEFT. "
+            "The character's FACE is turned toward the LEFT side of the image. "
+            "The character's HEAD points to the LEFT. "
+            "The entire body faces LEFT. "
+            "This is NOT a mirror — do NOT face the character to the right."
+        ),
+        "right": (
+            "Side view — the character is MOVING to the RIGHT. "
+            "The character's FACE is turned toward the RIGHT side of the image. "
+            "The character's HEAD points to the RIGHT. "
+            "The entire body faces RIGHT. "
+            "This is NOT a mirror — do NOT face the character to the left."
+        ),
+        "up-right": (
+            "The character is facing UP-RIGHT (diagonal back-right view). "
+            "You see the character's back and right side. "
+            "The character moves toward the upper-right corner."
+        ),
+        "up-left": (
+            "The character is facing UP-LEFT (diagonal back-left view). "
+            "You see the character's back and left side. "
+            "The character moves toward the upper-left corner."
+        ),
+        "down-right": (
+            "The character is facing DOWN-RIGHT (diagonal front-right view). "
+            "You see the character's front and right side. "
+            "The character moves toward the lower-right corner."
+        ),
+        "down-left": (
+            "The character is facing DOWN-LEFT (diagonal front-left view). "
+            "You see the character's front and left side. "
+            "The character moves toward the lower-left corner."
+        ),
+    }
+
     def _build_row_descriptions(self, direction_count: int, action: str) -> str:
         """Generate explicit per-row direction labels for the template."""
         directions = self._directions(direction_count)
@@ -329,11 +384,29 @@ class PromptOptimizer:
         return "\n".join(lines)
 
     _ACTION_DESCRIPTIONS: dict[str, str] = {
-        "idle": "idle standing pose with subtle breathing/swaying animation",
-        "walk": "walk cycle animation showing natural leg alternation and arm swing",
-        "attack": "attack animation sequence with wind-up, strike, and recovery",
-        "hurt": "hurt/flinch reaction animation showing impact and stagger",
-        "die": "death animation showing collapse from standing to fallen",
+        "idle": (
+            "idle standing pose — subtle breathing/swaying motion. "
+            "Each frame is a slightly different phase of the idle loop."
+        ),
+        "walk": (
+            "walk cycle — character walks forward in-place. "
+            "Frames show sequential leg positions: stride, contact, push-off. "
+            "Arms swing opposite to legs. Clear alternation between left and right limbs."
+        ),
+        "attack": (
+            "attack sequence — character performs an attack motion. "
+            "Frames show: wind-up/preparation → strike/contact → follow-through/recovery. "
+            "Weapon or limb moves through the full arc of the attack."
+        ),
+        "hurt": (
+            "hurt/flinch reaction — character takes damage and recoils. "
+            "Frames show: impact frame → stagger backward → recovery to standing. "
+            "Body bends and recoils from the hit direction."
+        ),
+        "die": (
+            "death/collapse sequence — character falls from standing to fallen. "
+            "Frames show: initial buckle → falling motion → lying on ground."
+        ),
     }
 
     def _action_description(self, action: str) -> str:
@@ -398,3 +471,149 @@ class PromptOptimizer:
         if len(words) <= TARGET_MAX_WORDS:
             return prompt
         return " ".join(words[:TARGET_MAX_WORDS])
+
+    # ------------------------------------------------------------------
+    # Quality pipeline methods
+    # ------------------------------------------------------------------
+
+    async def optimize_base_character(
+        self,
+        user_prompt: str,
+        style: StyleProfile | None = None,
+        reference_style_description: str | None = None,
+    ) -> OptimizedPrompt:
+        """Step 1: Build prompt for generating a single base character image."""
+        cleaned_prompt = user_prompt.strip()
+        if not cleaned_prompt:
+            raise InvalidParamError("用户描述不能为空")
+
+        english_desc = await self._translate_subject(cleaned_prompt)
+        style_keywords = self._style_keywords(style)
+        extra_style_keywords = self._extra_style_keywords(style, reference_style_description)
+        perspective = self._perspective_keyword(style.perspective if style else Perspective.TOP_DOWN)
+
+        reference_note = ""
+        if reference_style_description:
+            reference_note = (
+                f"Style reference: match the visual style described as \"{reference_style_description.strip()}\", "
+                f"maintain consistent art style and color palette."
+            )
+
+        prompt = CHARACTER_BASE_IMAGE_TEMPLATE.format(
+            style_keywords=style_keywords,
+            user_description=english_desc,
+            perspective=perspective,
+            reference_style_note=reference_note,
+            extra_style_keywords=extra_style_keywords,
+        )
+        return OptimizedPrompt(
+            prompt=self._trim_prompt(prompt),
+            template_used="character_base_image",
+            user_prompt_original=user_prompt,
+        )
+
+    async def generate_action_details(
+        self,
+        character_description: str,
+        action: str,
+    ) -> str:
+        """Generate a unified action-detail description via LLM.
+
+        This ensures all directions use the SAME physical motion mechanics
+        (e.g. a duck always pecks with its beak, not claws or wings).
+        """
+        if not self.api_key:
+            return ""
+
+        base_url = self._BASE_URLS.get(self.api_provider)
+        if not base_url:
+            return ""
+
+        system_msg = (
+            "You are a game animation designer. "
+            "Given a character and an action, output 1-2 concise English sentences "
+            "describing HOW this specific character physically performs the action. "
+            "Be specific about body parts and movement. "
+            "Output ONLY the description text — no explanations, no titles, no quotes."
+        )
+
+        user_msg = (
+            f"Character: {character_description}\n"
+            f"Action: {action}\n\n"
+            f"Describe the physical motion (e.g. 'pecking forward with beak', "
+            f"'swinging sword in an overhead arc', 'rearing up on hind legs').\n"
+            f"Do NOT mention direction, camera angle, or orientation.\n\n"
+            f"Action detail description:"
+        )
+
+        payload: dict[str, Any] = {
+            "model": self.api_model,
+            "messages": [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 120,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=PROMPT_OPTIMIZER_TIMEOUT_SECONDS) as client:
+                response = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+            if response.status_code >= 400:
+                return ""
+            data = response.json()
+            content = data["choices"][0]["message"].get("content") or ""
+            content = content.strip().strip('"').strip("'")
+            content = content.split("\n")[0].strip()
+            return content
+        except Exception:
+            return ""
+
+    def optimize_direction_row(
+        self,
+        direction: str,
+        frame_count: int,
+        action: str,
+        action_details: str = "",
+        style: StyleProfile | None = None,
+    ) -> OptimizedPrompt:
+        """Step 2: Build prompt for generating a single direction animation row."""
+        style_keywords = self._style_keywords(style)
+        extra_style_keywords = self._extra_style_keywords(style, None)
+
+        orientation_description = self._DIRECTION_ORIENTATIONS.get(direction, direction)
+        action_description = self._action_description(action)
+
+        prompt = CHARACTER_DIRECTION_ROW_TEMPLATE.format(
+            style_keywords=style_keywords,
+            action_description=action_description,
+            action_details=action_details or "performing the action naturally",
+            frame_count=frame_count,
+            action_name=action,
+            orientation_description=orientation_description,
+            extra_style_keywords=extra_style_keywords,
+        )
+        return OptimizedPrompt(
+            prompt=self._trim_prompt(prompt),
+            template_used="character_direction_row",
+            user_prompt_original="",
+        )
+
+    def extract_character_description(self, optimized_prompt: str, revised_prompt: str | None, user_prompt: str) -> str:
+        """Extract a concise English character description from base image metadata."""
+        # Prefer the optimized prompt (already English, structured)
+        # Fall back to revised_prompt from the API, then user_prompt
+        desc = optimized_prompt or revised_prompt or user_prompt
+        # Take the first 200 words to keep it concise
+        words = desc.split()
+        if len(words) > 200:
+            desc = " ".join(words[:200])
+        return desc

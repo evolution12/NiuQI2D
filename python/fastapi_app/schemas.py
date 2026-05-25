@@ -307,6 +307,40 @@ class GenerateResponse(BaseModel):
     mode: GenerationMode
 
 
+# --- Quality Pipeline Schemas ---
+
+class QualityPipelineBaseResponse(BaseModel):
+    """Step 1 response: base character image candidates."""
+    records: list[GenerationCandidateResponse]
+    optimized_prompt: str
+    pipeline_id: str
+
+
+class QualityPipelineDirectionRequest(BaseModel):
+    """Step 2 request: generate directions from selected base."""
+    base_record_id: str
+    direction_count: int = 4
+    frame_count: int = 3
+    actions: list[str] | None = None
+    target_size: tuple[int, int] = (16, 16)
+    seed: str | None = None
+
+
+class DirectionResult(BaseModel):
+    direction: str
+    status: str  # "success" | "failed"
+    record_id: str | None = None
+    error: str | None = None
+
+
+class QualityPipelineDirectionResponse(BaseModel):
+    """Step 2+3 response: composed spritesheet result."""
+    composed_record_id: str
+    pipeline_id: str
+    direction_results: list[DirectionResult]
+    manifest: dict[str, Any]
+
+
 class SelectRecordRequest(BaseModel):
     name: str
     tags: list[str] = Field(default_factory=list)
