@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 MAP_TEMPLATE = """
-{style_keywords} complete game map of {user_description},
-full top-down level layout, {width}px wide x {height}px tall total image,
-seamless terrain blending, multiple terrain zones,
-game level design with paths, obstacles, clear playable area,
-{extra_style_keywords}
+{style_keywords} game map, {user_description},
+top-down level layout, {width}px × {height}px total image,
+seamless terrain blending, clear playable area with paths and obstacles,
+game level design, {extra_style_keywords},
+NO text, NO logo, NO UI overlay, NO perspective distortion
 """.strip()
