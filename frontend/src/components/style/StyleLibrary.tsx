@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../common/ConfirmDialog';
 import { StyleCard } from './StyleCard';
 import { StyleEditor } from './StyleEditor';
 import type { StyleProfile, CreateStyleRequest } from '../../types';
+import { compactStyleOptions } from '../../utils/styleOptions';
 
 interface StyleLibraryProps {
   onClose: () => void;
@@ -148,7 +149,7 @@ export function StyleLibrary({ onClose, onSelect }: StyleLibraryProps) {
                 gap: 'var(--sp-3)',
               }}
             >
-              {styles.map((style) => (
+              {compactStyleOptions(styles).map((style) => (
                 <StyleCard
                   key={style.id}
                   style={style}

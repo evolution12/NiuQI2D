@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { styleApi } from '../../services/api';
 import type { AssetType, AssetSubtype, GenerateParams, StyleProfile } from '../../types';
+import { compactStyleOptions, getStyleDisplayName } from '../../utils/styleOptions';
 
 const MAP_SIZE_PRESETS: [number, number][] = [
   [512, 512], [1024, 1024], [1536, 1024], [2048, 2048], [2048, 1536],
@@ -50,8 +51,8 @@ export function ParamPanel({ assetType, assetSubtype, params, onChange }: { asse
           style={{ width: '100%' }}
         >
           <option value="">自动（使用项目默认）</option>
-          {styles.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
+          {compactStyleOptions(styles).map((s) => (
+            <option key={s.id} value={s.id}>{getStyleDisplayName(s)}</option>
           ))}
         </select>
       </div>
