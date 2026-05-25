@@ -165,7 +165,15 @@ export function ParamPanel({ assetType, assetSubtype, params, onChange }: { asse
           </div>
           <div className="form-row">
             <label className="form-label">边缘规则</label>
-            <select className="nq-select" style={{ width: '100%' }}><option value="seamless">无缝拼接</option><option value="bordered">有边框</option></select>
+            <select
+              className="nq-select"
+              value={params.edge_rule ?? 'seamless'}
+              onChange={(e) => up({ edge_rule: e.target.value })}
+              style={{ width: '100%' }}
+            >
+              <option value="seamless">无缝拼接</option>
+              <option value="bordered">有边框</option>
+            </select>
           </div>
         </>
       )}

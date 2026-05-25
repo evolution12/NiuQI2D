@@ -4,11 +4,19 @@ import asyncio
 
 from PIL import Image
 
+from ..models import AssetSubtype
 from .base import PostProcessContext, PostProcessStep, active_images, ensure_rgba, replace_active_images
 
 
 class CropCenterStep(PostProcessStep):
     name = "crop_center"
+
+    def should_run(self, context: PostProcessContext) -> bool:
+        # Skip for animated spritesheets: each frame from grid extraction is already
+        # uniformly sized. Individual per-frame cropping would misalign frames.
+        if context.asset_subtype == AssetSubtype.ANIMATED_SPRITESHEET:
+            return False
+        return True
 
     def params(self, context: PostProcessContext) -> dict[str, tuple[int, int]]:
         return {"target_size": context.target_size}

@@ -23,7 +23,7 @@ from ..schemas import (
     SelectRecordResponse,
     VariantRequest,
 )
-from ..postprocess import FrameExtractorStep, PostProcessContext
+from ..postprocess import PostProcessContext
 from ..services.image_generator import ImageGenerator
 from ..services.postprocess import PostProcessPipeline
 from ..services.prompt_optimizer import PromptOptimizer
@@ -64,6 +64,8 @@ class GenerationService:
             direction_count=body.direction_count,
             frame_count=body.frame_count,
             terrain_type=body.terrain_type,
+            target_size=body.target_size,
+            edge_rule=body.edge_rule,
         )
         generator = ImageGenerator(self.session, self.storage, self.settings)
         result = await generator.generate_candidates(
@@ -347,19 +349,9 @@ class GenerationService:
             )
         )
 
-        preview_context = await FrameExtractorStep().run(
-            PostProcessContext(
-                image=source_image,
-                asset_type=record.asset_type,
-                asset_subtype=record.asset_subtype,
-                target_size=target_size,
-                sheet_rows=sheet_rows,
-                sheet_cols=sheet_cols,
-            )
-        )
-        preview_frames = self._prepare_preview_frames(preview_context.extracted_frames or [preview_context.image])
-
         frames = context.extracted_frames or [context.image]
+        # Use the same processed frames for preview to ensure consistency
+        preview_frames = self._prepare_preview_frames(frames)
         preview_paths: list[str] = []
         frame_paths: list[str] = []
         for index, frame in enumerate(preview_frames):
@@ -465,9 +457,6 @@ class GenerationService:
         # Static images: use target_size from UI, ensure minimum pixel requirement
         tw, th = body.target_size or (256, 256)
         return self._ensure_min_size(tw, th)
-        rows = max(1, body.direction_count * len(actions))
-        cols = max(1, body.frame_count)
-        return self._provider_size_for_grid(cols, rows)
 
     def _ensure_min_size(self, w: int, h: int) -> tuple[int, int]:
         """Ensure the image size meets minimum requirements for AI providers."""
@@ -485,10 +474,31 @@ class GenerationService:
         return self._provider_size_for_grid(max(cols, 1), max(rows, 1))
 
     def _provider_size_for_grid(self, cols: int, rows: int) -> tuple[int, int]:
+        """Pick the provider image size whose aspect ratio best matches cols:rows.
+
+        Model-aware: for OpenAI, distinguishes between DALL-E 3 and GPT Image 1
+        to avoid requesting disallowed sizes.
+        """
         provider = self.settings.image_api_provider
         aspect = cols / rows
+
         if provider == "openai":
-            candidates = [(1024, 1024), (1536, 1024), (1024, 1536)]
+            model = (self.settings.quality_image_model or self.settings.image_api_model).lower()
+            if model == "dall-e-3":
+                candidates = [
+                    (1024, 1024),
+                    (1792, 1024),
+                    (1024, 1792),
+                ]
+            else:
+                # GPT Image 1 supports 1024×1024, 1536×1024, 1024×1536
+                # but for grid matching we want more aspect-ratio variety,
+                # so we generate at the closest allowed size
+                candidates = [
+                    (1024, 1024),
+                    (1536, 1024),
+                    (1024, 1536),
+                ]
         elif provider == "doubao":
             candidates = [
                 (2048, 2048),
@@ -505,6 +515,9 @@ class GenerationService:
                 (1152, 864),
                 (864, 1152),
             ]
+
+        # Score each candidate: prefer both aspect-ratio closeness AND
+        # sufficient total pixels (avoid picking tiny sizes for large grids)
         return min(candidates, key=lambda size: abs((size[0] / size[1]) - aspect))
 
     def _prepare_preview_frames(self, frames: list[Image.Image]) -> list[Image.Image]:

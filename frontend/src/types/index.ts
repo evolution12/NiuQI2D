@@ -282,6 +282,7 @@ export interface GenerateParams {
   actions?: string[];
   reference_image_path?: string;
   terrain_type?: string;
+  edge_rule?: string;
 }
 
 /** 导出配置联合类型 */

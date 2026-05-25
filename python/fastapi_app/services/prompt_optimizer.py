@@ -63,6 +63,8 @@ class PromptOptimizer:
         direction_count: int = 4,
         frame_count: int = 3,
         terrain_type: str | None = None,
+        target_size: tuple[int, int] | None = None,
+        edge_rule: str | None = None,
     ) -> OptimizedPrompt:
         cleaned_prompt = user_prompt.strip()
         if not cleaned_prompt:
@@ -80,6 +82,8 @@ class PromptOptimizer:
             direction_count,
             frame_count,
             terrain_type,
+            target_size,
+            edge_rule,
         )
         optimized_prompt = await self._optimize_with_provider(template_prompt)
         return OptimizedPrompt(
@@ -99,11 +103,17 @@ class PromptOptimizer:
         direction_count: int,
         frame_count: int,
         terrain_type: str | None = None,
+        target_size: tuple[int, int] | None = None,
+        edge_rule: str | None = None,
     ) -> tuple[str, str]:
         style_keywords = self._style_keywords(style)
         extra_style_keywords = self._extra_style_keywords(style, reference_style_description)
         perspective = self._perspective_keyword(style.perspective if style else Perspective.TOP_DOWN)
-        width, height = self._default_size(style)
+        # Use user-provided target_size, fallback to style default
+        if target_size:
+            width, height = target_size
+        else:
+            width, height = self._default_size(style)
 
         if asset_type == AssetType.CHARACTER:
             subtype = asset_subtype or AssetSubtype.STATIC_IMAGE
@@ -141,7 +151,7 @@ class PromptOptimizer:
             )
 
         if asset_type == AssetType.TILE:
-            edge_rule = self._extra_param(style, "edge_rule", "clean seamless")
+            effective_edge_rule = edge_rule or self._extra_param(style, "edge_rule", "clean seamless")
             terrain_label = terrain_type or self._extra_param(style, "terrain_type", "natural")
             return (
                 TILE_TEMPLATE.format(
@@ -149,7 +159,7 @@ class PromptOptimizer:
                     user_description=user_prompt,
                     tile_width=width,
                     tile_height=height,
-                    edge_rule=edge_rule,
+                    edge_rule=effective_edge_rule,
                     terrain_type=terrain_label,
                     extra_style_keywords=extra_style_keywords,
                 ),
