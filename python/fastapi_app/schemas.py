@@ -294,6 +294,7 @@ class GenerateRequest(BaseModel):
     actions: list[str] | None = None
     target_size: tuple[int, int] = (16, 16)
     terrain_type: str | None = None
+    edge_rule: str | None = None
     preview_mode: bool = False
     transparent_background: bool = True
     candidate_count: int | None = None

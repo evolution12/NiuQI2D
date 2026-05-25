@@ -103,7 +103,11 @@ class StorageManager:
             raise ResourceNotFoundError(f"图片 {image_path} 不存在")
 
         size = self._thumbnail_size(asset_type)
-        thumbnail_path = source_path.parent.parent / "thumbnails" / f"{source_path.stem}_thumb.png"
+        # Include parent directory name (e.g. record_id) to avoid collisions:
+        # animated frames all share stem "frame_000", so without the parent stem
+        # every animated asset would overwrite the same thumbnail file.
+        thumb_name = f"{source_path.parent.stem}_{source_path.stem}_thumb.png"
+        thumbnail_path = source_path.parent.parent / "thumbnails" / thumb_name
         await asyncio.to_thread(self._generate_thumbnail_sync, source_path, thumbnail_path, size, art_style)
         return self._relative_image_path(thumbnail_path)
 
