@@ -20,12 +20,11 @@ from ..schemas import (
 )
 from ..services.generation_service import GenerationService
 from ..crud.style import StyleCRUD
-from ..services.quality_pipeline_service import (
-    QualityPipelineService,
-    get_pipeline_progress,
-)
+from ..services.quality_pipeline_service import QualityPipelineService
 
 router = APIRouter(tags=["generation"])
+
+_record_response = GenerationService.candidate_response
 
 
 @router.post("/generate", response_model=GenerateResponse, status_code=status.HTTP_201_CREATED)
@@ -72,25 +71,7 @@ async def get_generation_record(
     session: AsyncSession = Depends(get_session),
 ) -> GenerationCandidateResponse:
     record = await GenerationCRUD().get(session, record_id)
-    image_url = record.api_params.get("image_url")
-    return GenerationCandidateResponse(
-        id=record.id,
-        project_id=record.project_id,
-        asset_id=record.asset_id,
-        image_url=image_url if isinstance(image_url, str) else None,
-        user_prompt=record.user_prompt,
-        optimized_prompt=record.optimized_prompt,
-        style_id=record.style_id,
-        asset_type=record.asset_type,
-        asset_subtype=record.asset_subtype,
-        api_provider=record.api_provider,
-        api_model=record.api_model,
-        api_params=record.api_params,
-        seed=record.seed,
-        reference_image_path=record.reference_image_path,
-        postprocess_log=record.postprocess_log,
-        created_at=record.created_at,
-    )
+    return _record_response(record)
 
 
 @router.post("/generation/{record_id}/select", response_model=SelectRecordResponse)
@@ -157,7 +138,7 @@ async def quality_pipeline_base(
     records = []
     for r in result["records"]:
         record = await GenerationCRUD().get(session, r["id"])
-        records.append(_candidate_response(record))
+        records.append(_record_response(record))
 
     return QualityPipelineBaseResponse(
         records=records,
@@ -189,35 +170,4 @@ async def quality_pipeline_directions(
     return StreamingResponse(
         event_stream(),
         media_type="application/x-ndjson",
-    )
-
-
-@router.get("/generate/quality-pipeline/progress/{pipeline_id}")
-async def quality_pipeline_progress(pipeline_id: str) -> dict:
-    """Get real-time progress for a quality pipeline direction generation."""
-    progress = get_pipeline_progress(pipeline_id)
-    if progress is None:
-        return {"status": "not_found", "current": 0, "total": 0, "message": "无进度信息"}
-    return progress
-
-
-def _candidate_response(record) -> GenerationCandidateResponse:
-    image_url = record.api_params.get("image_url")
-    return GenerationCandidateResponse(
-        id=record.id,
-        project_id=record.project_id,
-        asset_id=record.asset_id,
-        image_url=image_url if isinstance(image_url, str) else None,
-        user_prompt=record.user_prompt,
-        optimized_prompt=record.optimized_prompt,
-        style_id=record.style_id,
-        asset_type=record.asset_type,
-        asset_subtype=record.asset_subtype,
-        api_provider=record.api_provider,
-        api_model=record.api_model,
-        api_params=record.api_params,
-        seed=record.seed,
-        reference_image_path=record.reference_image_path,
-        postprocess_log=record.postprocess_log,
-        created_at=record.created_at,
     )

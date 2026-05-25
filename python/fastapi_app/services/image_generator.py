@@ -14,9 +14,7 @@ from ..schemas import GenerationRecordCreateRequest
 from ..storage import StorageManager
 
 PREVIEW_MIN_CANDIDATES = 1
-PREVIEW_MAX_CANDIDATES = 1
 QUALITY_MIN_CANDIDATES = 1
-QUALITY_MAX_CANDIDATES = 1
 DEFAULT_PROVIDER_IMAGE_SIZE = (1024, 1024)
 
 
@@ -45,38 +43,7 @@ class ImageGenerator:
     ) -> None:
         self.session = session
         self.storage = storage
-        self.settings = settings or get_settings()
         self.generation_crud = GenerationCRUD()
-
-    async def generate_one(
-        self,
-        project_id: str,
-        user_prompt: str,
-        optimized_prompt: str,
-        style_id: str,
-        asset_type: AssetType,
-        asset_subtype: AssetSubtype | None = None,
-        mode: GenerationMode = GenerationMode.QUALITY,
-        transparent_background: bool = False,
-        provider_size: tuple[int, int] = DEFAULT_PROVIDER_IMAGE_SIZE,
-        seed: str | None = None,
-        reference_image_path: str | None = None,
-    ) -> StoredGeneratedImage:
-        result = await self.generate_candidates(
-            project_id=project_id,
-            user_prompt=user_prompt,
-            optimized_prompt=optimized_prompt,
-            style_id=style_id,
-            asset_type=asset_type,
-            asset_subtype=asset_subtype,
-            mode=mode,
-            candidate_count=1,
-            transparent_background=transparent_background,
-            provider_size=provider_size,
-            seed=seed,
-            reference_image_path=reference_image_path,
-        )
-        return result.records[0]
 
     async def generate_candidates(
         self,

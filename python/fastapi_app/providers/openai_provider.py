@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import io
 from typing import Any
@@ -235,22 +234,6 @@ class OpenAIProvider(ImageGeneratorBase):
 
         raise last_error or ApiCallFailedError("图片编辑失败")
 
-    async def _sleep_before_retry(self, attempt: int) -> None:
-        delay = RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
-        await asyncio.sleep(delay)
-
-    async def _download_image(self, image_url: str) -> bytes:
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.get(image_url)
-        except httpx.TimeoutException as exc:
-            raise GenerationTimeoutError("下载生成图片超时") from exc
-        except httpx.HTTPError as exc:
-            raise ApiCallFailedError("下载生成图片失败") from exc
-        if response.status_code >= 400:
-            raise ApiCallFailedError("下载生成图片返回错误", {"status_code": response.status_code})
-        return response.content
-
     def _parse_images(self, data: dict[str, Any], size: tuple[int, int], seed: str | None) -> list[GeneratedImage]:
         items = data.get("data")
         if not isinstance(items, list):
@@ -283,12 +266,7 @@ class OpenAIProvider(ImageGeneratorBase):
         return images
 
     def _validate_generate_args(self, prompt: str, size: tuple[int, int], n: int) -> None:
-        if not prompt.strip():
-            raise InvalidParamError("生成 Prompt 不能为空")
-        if n < 1 or n > 6:
-            raise InvalidParamError("候选数量必须在 1 到 6 之间")
-        if size[0] <= 0 or size[1] <= 0:
-            raise InvalidParamError("图片尺寸必须为正整数")
+        self._validate_args(prompt, size, n)
 
     def _unit_cost(self, size: tuple[int, int], quality: str) -> float:
         if self._is_dall_e_3:
