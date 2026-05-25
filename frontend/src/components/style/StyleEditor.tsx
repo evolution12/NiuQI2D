@@ -24,8 +24,8 @@ const perspectiveOptions: { value: Perspective; label: string }[] = [
 export function StyleEditor({ initial, onSave, onCancel }: StyleEditorProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [artStyle, setArtStyle] = useState<ArtStyle>(initial?.art_style ?? 'pixel');
-  const [width, setWidth] = useState(initial?.default_size?.w ?? 64);
-  const [height, setHeight] = useState(initial?.default_size?.h ?? 64);
+  const [width] = useState(initial?.default_size?.w ?? 64);
+  const [height] = useState(initial?.default_size?.h ?? 64);
   const [perspective, setPerspective] = useState<Perspective>(
     initial?.perspective ?? 'top_down',
   );

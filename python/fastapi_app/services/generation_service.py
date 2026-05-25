@@ -21,7 +21,7 @@ from ..schemas import (
     SelectRecordResponse,
     VariantRequest,
 )
-from ..postprocess import PostProcessContext
+from ..postprocess import FrameExtractorStep, PostProcessContext
 from ..services.image_generator import ImageGenerator
 from ..services.postprocess import PostProcessPipeline
 from ..services.prompt_optimizer import PromptOptimizer
@@ -380,6 +380,7 @@ class GenerationService:
         manifest = {
             "frames": frame_paths,
             "preview_frames": preview_paths,
+            "preview_frame_kind": "source_grid_full_frame",
             "frame_delay_ms": 120,
             "actions": self._animation_actions(actions, direction_count, frame_count, len(frame_paths)),
             "sheet_rows": sheet_rows,

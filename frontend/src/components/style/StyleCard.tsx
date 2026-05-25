@@ -1,18 +1,5 @@
 import type { StyleProfile } from '../../types';
-
-const artStyleLabels: Record<string, string> = {
-  pixel: '像素风',
-  hand_drawn: '手绘风',
-  cartoon: '卡通风',
-  realistic: '写实风',
-  custom: '自定义',
-};
-
-const perspectiveLabels: Record<string, string> = {
-  top_down: '俯视',
-  side_scroller: '横版',
-  isometric: '等距',
-};
+import { artStyleLabels, getStyleDisplayName, perspectiveLabels } from '../../utils/styleOptions';
 
 interface StyleCardProps {
   style: StyleProfile;
@@ -54,7 +41,7 @@ export function StyleCard({
         }}
       >
         <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-1)' }}>
-          {style.name}
+          {getStyleDisplayName(style)}
         </span>
         <div style={{ display: 'flex', gap: 'var(--sp-1)' }}>
           <span

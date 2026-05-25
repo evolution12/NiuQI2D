@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { CreateProjectRequest, StyleProfile } from '../../types';
+import { compactStyleOptions, getStyleDisplayName } from '../../utils/styleOptions';
 
 export function ProjectCreateModal({ styles, onConfirm, onCancel }: { styles: StyleProfile[]; onConfirm: (d: CreateProjectRequest) => void; onCancel: () => void }) {
   const [name, setName] = useState('');
@@ -20,7 +21,7 @@ export function ProjectCreateModal({ styles, onConfirm, onCancel }: { styles: St
             <label className="form-label">默认风格（可选）</label>
             <select className="nq-select" value={styleId} onChange={(e) => setStyleId(e.target.value)} style={{ width: '100%' }}>
               <option value="">无</option>
-              {styles.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {compactStyleOptions(styles).map((s) => <option key={s.id} value={s.id}>{getStyleDisplayName(s)}</option>)}
             </select>
           </div>
         </div>

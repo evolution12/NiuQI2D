@@ -22,7 +22,8 @@ export function PathSelector({ value, onChange }: PathSelectorProps) {
     } catch {
       // Fallback to browser File System Access API
       try {
-        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        const dirHandle = await window.showDirectoryPicker?.({ mode: 'readwrite' });
+        if (!dirHandle) return;
         onChange(dirHandle.name);
       } catch {
         // User cancelled

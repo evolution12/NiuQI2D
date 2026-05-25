@@ -13,8 +13,6 @@ const allExportTypes: { format: ExportFormat; label: string; desc: string; allow
 ];
 
 export function ExportTypeSelector({ value, onChange, assets }: ExportTypeSelectorProps) {
-  const available = allExportTypes.filter((t) => t.allowed(assets));
-
   return (
     <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
       {allExportTypes.map(({ format, label, desc, allowed }) => {
