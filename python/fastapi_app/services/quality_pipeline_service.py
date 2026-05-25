@@ -26,27 +26,10 @@ from ..services.image_generator import ImageGenerator
 from ..services.postprocess import PostProcessPipeline
 from ..services.prompt_optimizer import PromptOptimizer
 from ..storage import StorageManager
+from ._sprite_utils import build_action_mapping, direction_names, png_bytes, prepare_preview_frames
+from ._image_size import ensure_min_size, provider_size_for_grid
 
 logger = logging.getLogger(__name__)
-
-# In-memory progress tracker for quality pipeline direction generation.
-# Key: pipeline_id, Value: dict with progress info.
-_pipeline_progress: dict[str, dict[str, Any]] = {}
-
-
-def set_pipeline_progress(pipeline_id: str, data: dict[str, Any]) -> None:
-    """Update progress for a pipeline."""
-    _pipeline_progress[pipeline_id] = data
-
-
-def get_pipeline_progress(pipeline_id: str) -> dict[str, Any] | None:
-    """Get current progress for a pipeline."""
-    return _pipeline_progress.get(pipeline_id)
-
-
-def clear_pipeline_progress(pipeline_id: str) -> None:
-    """Remove progress entry after completion."""
-    _pipeline_progress.pop(pipeline_id, None)
 
 
 class QualityPipelineService:
@@ -166,7 +149,7 @@ class QualityPipelineService:
         style_crud = StyleCRUD()
         style = await style_crud.get(self.session, base_record.style_id) if base_record.style_id else None
 
-        direction_names = self._direction_names(direction_count)
+        dir_names = direction_names(direction_count)
         provider_size = self._provider_size_for_row(frame_count, target_size)
 
         generator = ImageGenerator(self.session, self.storage, self.settings)
@@ -174,7 +157,7 @@ class QualityPipelineService:
 
         direction_results: list[dict[str, Any]] = []
         direction_rows: list[tuple[str, Image.Image]] = []
-        total_directions = len(direction_names) * len(actions[:1])
+        total_directions = len(dir_names) * len(actions[:1])
         completed = 0
 
         for action in actions[:1]:
@@ -183,7 +166,7 @@ class QualityPipelineService:
                 action=action,
             )
 
-            for i, direction in enumerate(direction_names):
+            for i, direction in enumerate(dir_names):
                 yield json.dumps({
                     "type": "progress",
                     "current": completed + 1,
@@ -386,21 +369,21 @@ class QualityPipelineService:
         )
 
         frames = context.extracted_frames or [context.image]
-        preview_frames = self._prepare_preview_frames(frames)
+        preview_frames = prepare_preview_frames(frames)
 
         preview_paths: list[str] = []
         frame_paths: list[str] = []
         for index, frame in enumerate(preview_frames):
             preview_paths.append(
-                await self.storage.save_preview_frame(project_id, group_id, index, self._png_bytes(frame))
+                await self.storage.save_preview_frame(project_id, group_id, index, png_bytes(frame))
             )
         for index, frame in enumerate(frames):
             frame_paths.append(
-                await self.storage.save_processed_frame(project_id, group_id, index, self._png_bytes(frame))
+                await self.storage.save_processed_frame(project_id, group_id, index, png_bytes(frame))
             )
 
-        direction_names = self._direction_names(direction_count)
-        action_mapping = self._build_action_mapping(actions, direction_names, frame_count, len(frame_paths))
+        dir_names = direction_names(direction_count)
+        action_mapping = build_action_mapping(actions, dir_names, frame_count, len(frame_paths))
 
         manifest = {
             "frames": frame_paths,
@@ -413,27 +396,6 @@ class QualityPipelineService:
         }
         await self.storage.save_animation_manifest(project_id, group_id, manifest)
         return manifest
-
-    def _build_action_mapping(
-        self,
-        actions: list[str],
-        direction_names: list[str],
-        frame_count: int,
-        total_frames: int,
-    ) -> dict[str, list[int]]:
-        mapping: dict[str, list[int]] = {}
-        index = 0
-        for action in actions:
-            action_indexes: list[int] = []
-            for direction in direction_names:
-                frame_indexes = list(range(index, min(index + frame_count, total_frames)))
-                if frame_indexes:
-                    mapping[f"{action}_{direction}"] = frame_indexes
-                    action_indexes.extend(frame_indexes)
-                index += frame_count
-            if action_indexes:
-                mapping[f"{action}_all"] = action_indexes
-        return mapping
 
     async def _save_direction_record(
         self,
@@ -449,8 +411,6 @@ class QualityPipelineService:
         frame_count: int,
     ) -> str:
         """Save a direction row generation record."""
-        from ..providers.base import GeneratedImage
-
         record = await self.generation_crud.create(
             self.session,
             GenerationRecordCreateRequest(
@@ -488,57 +448,20 @@ class QualityPipelineService:
         )
         return record.id
 
-    def _prepare_preview_frames(self, frames: list[Image.Image]) -> list[Image.Image]:
-        return [self._prepare_preview_frame(frame) for frame in frames]
-
-    def _prepare_preview_frame(self, frame: Image.Image) -> Image.Image:
-        rgba = frame.convert("RGBA")
-        padding = max(2, round(max(rgba.size) * 0.08))
-        canvas = Image.new("RGBA", (rgba.width + padding * 2, rgba.height + padding * 2), (0, 0, 0, 0))
-        canvas.paste(rgba, (padding, padding), rgba)
-        return canvas
-
-    def _png_bytes(self, image: Image.Image) -> bytes:
-        output = BytesIO()
-        image.save(output, format="PNG")
-        return output.getvalue()
-
-    def _direction_names(self, direction_count: int) -> list[str]:
-        if direction_count == 1:
-            return ["down"]
-        if direction_count == 2:
-            return ["left", "right"]
-        if direction_count == 4:
-            return ["up", "down", "left", "right"]
-        return ["up", "up_right", "right", "down_right", "down", "down_left", "left", "up_left"]
-
     def _provider_size_for_single(self, target_size: tuple[int, int]) -> tuple[int, int]:
         """Provider size for a single base image (non-grid)."""
-        w, h = target_size
-        w = max(w, 256)
-        h = max(h, 256)
-        # Pick a square or near-square size at 1024+
         return (1024, 1024)
 
     def _provider_size_for_row(self, frame_count: int, target_size: tuple[int, int]) -> tuple[int, int]:
-        """Provider size for a 1×N row animation.
-
-        Picks the provider size whose aspect ratio best matches frame_count:1.
-        """
-        from .generation_service import GenerationService
-        gs = GenerationService.__new__(GenerationService)
-        gs.settings = self.settings
-        # Use the grid helper with cols=frame_count, rows=1
-        size = gs._provider_size_for_grid(frame_count, 1)
+        """Provider size for a 1×N row animation."""
+        size = provider_size_for_grid(self.settings, frame_count, 1)
         # If the best match is still too far from the target ratio (e.g. 1:1
         # picked for a 3:1 row), try to construct a custom wide size.
         aspect = size[0] / size[1]
         target_aspect = frame_count
         if abs(aspect - target_aspect) > 1.0:
-            # Build a size that matches the aspect ratio at reasonable resolution
             h = 1024
             w = h * frame_count
-            # Ensure we meet doubao min-pixels if needed
             if self.settings.image_api_provider == "doubao":
                 min_pixels = 3_686_400
                 if w * h < min_pixels:

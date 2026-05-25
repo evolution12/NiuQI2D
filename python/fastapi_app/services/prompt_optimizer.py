@@ -606,14 +606,3 @@ class PromptOptimizer:
             template_used="character_direction_row",
             user_prompt_original="",
         )
-
-    def extract_character_description(self, optimized_prompt: str, revised_prompt: str | None, user_prompt: str) -> str:
-        """Extract a concise English character description from base image metadata."""
-        # Prefer the optimized prompt (already English, structured)
-        # Fall back to revised_prompt from the API, then user_prompt
-        desc = optimized_prompt or revised_prompt or user_prompt
-        # Take the first 200 words to keep it concise
-        words = desc.split()
-        if len(words) > 200:
-            desc = " ".join(words[:200])
-        return desc

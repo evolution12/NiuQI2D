@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import logging
 from typing import Any
 
 import httpx
 
-from ..exceptions import ApiCallFailedError, ApiKeyInvalidError, GenerationTimeoutError, InvalidParamError
+from ..exceptions import ApiCallFailedError, ApiKeyInvalidError, GenerationTimeoutError
 from .base import CostEstimate, GeneratedImage, ImageGeneratorBase
 
 logger = logging.getLogger(__name__)
@@ -17,18 +16,12 @@ GENERATION_TIMEOUT_SECONDS = 90.0
 MAX_RETRIES = 3
 RETRY_BASE_DELAY_SECONDS = 2.0
 
-# 豆包文生图支持的常见尺寸
-ALLOWED_SIZES = {
-    (512, 512), (768, 768), (1024, 1024),
-    (768, 1024), (1024, 768),
-    (864, 1152), (1152, 864),
-}
-
 
 class VolcengineProvider(ImageGeneratorBase):
     """火山引擎豆包文生图 Provider"""
 
     provider_name = "volcengine"
+    RETRY_BASE_DELAY_SECONDS = RETRY_BASE_DELAY_SECONDS
 
     def __init__(
         self,
@@ -305,14 +298,3 @@ class VolcengineProvider(ImageGeneratorBase):
 
         return images
 
-    def _validate_args(self, prompt: str, size: tuple[int, int], n: int) -> None:
-        if not prompt.strip():
-            raise InvalidParamError("生成 Prompt 不能为空")
-        if n < 1 or n > 6:
-            raise InvalidParamError("候选数量必须在 1 到 6 之间")
-        if size[0] <= 0 or size[1] <= 0:
-            raise InvalidParamError("图片尺寸必须为正整数")
-
-    async def _sleep_before_retry(self, attempt: int) -> None:
-        delay = RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
-        await asyncio.sleep(delay)

@@ -1,35 +1,28 @@
 from __future__ import annotations
 
-import asyncio
 import base64
-import io
 import logging
 from typing import Any
 
 import httpx
 
-from ..exceptions import ApiCallFailedError, ApiKeyInvalidError, GenerationTimeoutError, InvalidParamError
+from ..exceptions import ApiCallFailedError, ApiKeyInvalidError, GenerationTimeoutError
 from .base import CostEstimate, GeneratedImage, ImageGeneratorBase
 
 logger = logging.getLogger(__name__)
 
 ARK_API_URL = "https://ark.cn-beijing.volces.com/api/v3/images/generations"
-ARK_EDITS_URL = "https://ark.cn-beijing.volces.com/api/v3/images/edits"
 GENERATION_TIMEOUT_SECONDS = 120.0
 MAX_RETRIES = 3
 RETRY_BASE_DELAY_SECONDS = 2.0
-
-# doubao-seedream-4-5 要求最低约 3,686,400 像素（≈1920×1920）
-ALLOWED_SIZES = [
-    "2048x2048", "1920x1920", "1920x1080", "1080x1920",
-    "2048x1152", "1152x2048",
-]
 
 
 class DoubaoArkProvider(ImageGeneratorBase):
     """火山引擎 Ark 平台豆包文生图 Provider（OpenAI 兼容接口）"""
 
     provider_name = "doubao"
+    MAX_N = 10
+    RETRY_BASE_DELAY_SECONDS = RETRY_BASE_DELAY_SECONDS
 
     def __init__(
         self,
@@ -94,7 +87,6 @@ class DoubaoArkProvider(ImageGeneratorBase):
             "image": image_data_uri,
         }
 
-        print(f"[Doubao] generate_with_reference: size={size}, prompt_len={len(prompt)}, image_data_uri_len={len(image_data_uri)}")
         data = await self._post_with_retry(payload)
         return self._parse_response(data, size, seed)
 
@@ -171,7 +163,7 @@ class DoubaoArkProvider(ImageGeneratorBase):
                 continue
             if response.status_code >= 400:
                 err_body = response.text[:800]
-                print(f"[Doubao] generations API error: status={response.status_code}, body={err_body}")
+                logger.warning("Doubao generations API error: status=%s, body=%s", response.status_code, err_body)
                 raise ApiCallFailedError(
                     f"豆包文生图 API 返回错误 (status={response.status_code})",
                     {"status_code": response.status_code, "body": err_body},
@@ -180,64 +172,6 @@ class DoubaoArkProvider(ImageGeneratorBase):
             return response.json()
 
         raise last_error or ApiCallFailedError("豆包文生图生成失败")
-
-    async def _post_edit_with_retry(self, form_files: list[tuple[str, Any]]) -> dict[str, Any]:
-        """POST multipart form to /images/edits endpoint (with reference image)."""
-        if not self.api_key:
-            raise ApiKeyInvalidError("未配置豆包 API Key")
-
-        headers = {"Authorization": f"Bearer {self.api_key}"}
-
-        last_error: ApiCallFailedError | GenerationTimeoutError | None = None
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                    response = await client.post(
-                        ARK_EDITS_URL,
-                        headers=headers,
-                        files=form_files,
-                    )
-            except httpx.TimeoutException as exc:
-                last_error = GenerationTimeoutError(
-                    "豆包图片编辑请求超时",
-                    {"attempt": attempt, "max_retries": self.max_retries},
-                )
-                if attempt >= self.max_retries:
-                    raise last_error from exc
-                await self._sleep_before_retry(attempt)
-                continue
-            except httpx.HTTPError as exc:
-                last_error = ApiCallFailedError(
-                    "豆包图片编辑 API 请求失败",
-                    {"attempt": attempt, "provider": self.provider_name},
-                )
-                if attempt >= self.max_retries:
-                    raise last_error from exc
-                await self._sleep_before_retry(attempt)
-                continue
-
-            if response.status_code in (401, 403):
-                raise ApiKeyInvalidError("豆包 API Key 无效")
-            if response.status_code in (408, 429) or response.status_code >= 500:
-                last_error = ApiCallFailedError(
-                    "豆包图片编辑 API 暂时不可用",
-                    {"attempt": attempt, "status_code": response.status_code, "body": response.text[:500]},
-                )
-                if attempt >= self.max_retries:
-                    raise last_error
-                await self._sleep_before_retry(attempt)
-                continue
-            if response.status_code >= 400:
-                err_body = response.text[:800]
-                print(f"[Doubao] API error: status={response.status_code}, body={err_body}")
-                raise ApiCallFailedError(
-                    f"豆包图片编辑 API 返回错误 (status={response.status_code})",
-                    {"status_code": response.status_code, "body": err_body},
-                )
-
-            return response.json()
-
-        raise last_error or ApiCallFailedError("豆包图片编辑失败")
 
     def _parse_response(
         self,
@@ -287,14 +221,3 @@ class DoubaoArkProvider(ImageGeneratorBase):
 
         return images
 
-    def _validate_args(self, prompt: str, size: tuple[int, int], n: int) -> None:
-        if not prompt.strip():
-            raise InvalidParamError("生成 Prompt 不能为空")
-        if n < 1 or n > 10:
-            raise InvalidParamError("候选数量必须在 1 到 10 之间")
-        if size[0] <= 0 or size[1] <= 0:
-            raise InvalidParamError("图片尺寸必须为正整数")
-
-    async def _sleep_before_retry(self, attempt: int) -> None:
-        delay = RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
-        await asyncio.sleep(delay)

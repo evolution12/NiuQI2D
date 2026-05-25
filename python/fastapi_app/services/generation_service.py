@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from io import BytesIO
-
 from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +26,8 @@ from ..services.image_generator import ImageGenerator
 from ..services.postprocess import PostProcessPipeline
 from ..services.prompt_optimizer import PromptOptimizer
 from ..storage import StorageManager
+from ._sprite_utils import build_action_mapping, direction_names, png_bytes, prepare_preview_frames
+from ._image_size import ensure_min_size, provider_size_for_grid
 
 
 class GenerationService:
@@ -86,7 +86,7 @@ class GenerationService:
             reference_image_path=body.reference_image_path,
         )
         records = [
-            self._candidate_response(await self.generation_crud.get(self.session, item.record_id))
+            self.candidate_response(await self.generation_crud.get(self.session, item.record_id))
             for item in result.records
         ]
         for record in records:
@@ -99,7 +99,7 @@ class GenerationService:
                 effective_actions,
                 body.terrain_type,
             )
-        refreshed = [self._candidate_response(await self.generation_crud.get(self.session, record.id)) for record in records]
+        refreshed = [self.candidate_response(await self.generation_crud.get(self.session, record.id)) for record in records]
         return GenerateResponse(records=refreshed, optimized_prompt=optimized.prompt, mode=mode)
 
     async def select_record(
@@ -170,7 +170,7 @@ class GenerationService:
             total = len(items)
         start = (page - 1) * page_size
         end = start + page_size
-        return [self._candidate_response(record) for record in items[start:end]], total
+        return [self.candidate_response(record) for record in items[start:end]], total
 
     async def reproduce(self, record_id: str) -> GenerateResponse:
         record = await self.generation_crud.get(self.session, record_id)
@@ -191,7 +191,7 @@ class GenerationService:
             seed=record.seed,
             reference_image_path=record.reference_image_path,
         )
-        records = [self._candidate_response(await self.generation_crud.get(self.session, item.record_id)) for item in result.records]
+        records = [self.candidate_response(await self.generation_crud.get(self.session, item.record_id)) for item in result.records]
         for response in records:
             await self._store_project_params(
                 response.id,
@@ -202,7 +202,7 @@ class GenerationService:
                 self._actions(record),
                 self._terrain_type(record),
             )
-        refreshed = [self._candidate_response(await self.generation_crud.get(self.session, response.id)) for response in records]
+        refreshed = [self.candidate_response(await self.generation_crud.get(self.session, response.id)) for response in records]
         return GenerateResponse(records=refreshed, optimized_prompt=record.optimized_prompt, mode=mode)
 
     async def variant(self, record_id: str, body: VariantRequest) -> GenerateResponse:
@@ -246,7 +246,7 @@ class GenerationService:
             reference_image_path=body.reference_image_path or record.reference_image_path,
         )
         target_size = body.target_size_override or self._target_size(record)
-        records = [self._candidate_response(await self.generation_crud.get(self.session, item.record_id)) for item in result.records]
+        records = [self.candidate_response(await self.generation_crud.get(self.session, item.record_id)) for item in result.records]
         for response in records:
             await self._store_project_params(
                 response.id,
@@ -257,7 +257,7 @@ class GenerationService:
                 self._actions(record),
                 self._terrain_type(record),
             )
-        refreshed = [self._candidate_response(await self.generation_crud.get(self.session, response.id)) for response in records]
+        refreshed = [self.candidate_response(await self.generation_crud.get(self.session, response.id)) for response in records]
         return GenerateResponse(records=refreshed, optimized_prompt=optimized_prompt, mode=mode)
 
     def _validate_asset_subtype(self, asset_type: AssetType, asset_subtype: AssetSubtype | None) -> None:
@@ -266,7 +266,8 @@ class GenerationService:
         if asset_type != AssetType.CHARACTER and asset_subtype is not None:
             raise InvalidParamError("仅 character 资产支持 asset_subtype")
 
-    def _candidate_response(self, record: GenerationRecord) -> GenerationCandidateResponse:
+    @staticmethod
+    def candidate_response(record: GenerationRecord) -> GenerationCandidateResponse:
         image_url = record.api_params.get("image_url")
         return GenerationCandidateResponse(
             id=record.id,
@@ -353,24 +354,8 @@ class GenerationService:
         )
 
         frames = context.extracted_frames or [context.image]
-        sheet_rows = context.sheet_rows or sheet_rows
-        sheet_cols = context.sheet_cols or sheet_cols
-        direction_count = max(1, sheet_rows // max(len(actions), 1))
-        frame_count = max(1, sheet_cols)
-        preview_context = await FrameExtractorStep().run(
-            PostProcessContext(
-                image=source_image,
-                asset_type=record.asset_type,
-                asset_subtype=record.asset_subtype,
-                target_size=target_size,
-                sheet_rows=sheet_rows,
-                sheet_cols=sheet_cols,
-            )
-        )
-        preview_source_frames = preview_context.extracted_frames or frames
-        if len(preview_source_frames) != len(frames):
-            preview_source_frames = frames
-        preview_frames = self._prepare_preview_frames(preview_source_frames)
+        # Use the same processed frames for preview to ensure consistency
+        preview_frames = prepare_preview_frames(frames)
         preview_paths: list[str] = []
         frame_paths: list[str] = []
         for index, frame in enumerate(preview_frames):
@@ -379,7 +364,7 @@ class GenerationService:
                     project_id,
                     record.id,
                     index,
-                    self._png_bytes(frame),
+                    png_bytes(frame),
                 )
             )
         for index, frame in enumerate(frames):
@@ -388,7 +373,7 @@ class GenerationService:
                     project_id,
                     record.id,
                     index,
-                    self._png_bytes(frame),
+                    png_bytes(frame),
                 )
             )
 
@@ -453,121 +438,25 @@ class GenerationService:
         frame_count: int,
         total_frames: int,
     ) -> dict[str, list[int]]:
-        direction_names = self._direction_names(direction_count)
-        mapping: dict[str, list[int]] = {}
-        index = 0
-        for action in actions:
-            action_indexes: list[int] = []
-            for direction_index in range(direction_count):
-                frame_indexes = list(range(index, min(index + frame_count, total_frames)))
-                if frame_indexes:
-                    dir_name = direction_names[direction_index] if direction_index < len(direction_names) else str(direction_index)
-                    mapping[f"{action}_{dir_name}"] = frame_indexes
-                    action_indexes.extend(frame_indexes)
-                index += frame_count
-            if action_indexes:
-                mapping[f"{action}_all"] = action_indexes
-        return mapping
-
-    def _direction_names(self, direction_count: int) -> list[str]:
-        if direction_count == 1:
-            return ["down"]
-        if direction_count == 2:
-            return ["left", "right"]
-        if direction_count == 4:
-            return ["up", "down", "left", "right"]
-        return ["up", "up_right", "right", "down_right", "down", "down_left", "left", "up_left"]
+        return build_action_mapping(actions, direction_names(direction_count), frame_count, total_frames)
 
     def _provider_size_for_request(self, body: GenerateRequest, effective_actions: list[str] | None = None) -> tuple[int, int]:
         if body.asset_subtype == AssetSubtype.ANIMATED_SPRITESHEET:
             actions = effective_actions or body.actions or ["idle"]
             rows = max(1, body.direction_count * len(actions))
             cols = max(1, body.frame_count)
-            return self._provider_size_for_grid(cols, rows)
+            return provider_size_for_grid(self.settings, cols, rows)
         # Static images: use target_size from UI, ensure minimum pixel requirement
         tw, th = body.target_size or (256, 256)
-        return self._ensure_min_size(tw, th)
-
-    def _ensure_min_size(self, w: int, h: int) -> tuple[int, int]:
-        """Ensure the image size meets minimum requirements for AI providers."""
-        # Minimum dimension: at least 256px each side
-        w = max(w, 256)
-        h = max(h, 256)
-        return (w, h)
+        return ensure_min_size(tw, th)
 
     def _provider_size_from_record(self, record: GenerationRecord) -> tuple[int, int]:
         if record.asset_subtype != AssetSubtype.ANIMATED_SPRITESHEET:
             target = self._target_size(record)
-            return self._ensure_min_size(target[0], target[1])
+            return ensure_min_size(target[0], target[1])
         cols = int(record.api_params.get("sheet_cols", record.api_params.get("frame_count", 3)))
         rows = int(record.api_params.get("sheet_rows", 4))
-        return self._provider_size_for_grid(max(cols, 1), max(rows, 1))
-
-    def _provider_size_for_grid(self, cols: int, rows: int) -> tuple[int, int]:
-        """Pick the provider image size whose aspect ratio best matches cols:rows.
-
-        Model-aware: for OpenAI, distinguishes between DALL-E 3 and GPT Image 1
-        to avoid requesting disallowed sizes.
-        """
-        provider = self.settings.image_api_provider
-        aspect = cols / rows
-
-        if provider == "openai":
-            model = (self.settings.quality_image_model or self.settings.image_api_model).lower()
-            if model == "dall-e-3":
-                candidates = [
-                    (1024, 1024),
-                    (1792, 1024),
-                    (1024, 1792),
-                ]
-            else:
-                # GPT Image 1 supports 1024×1024, 1536×1024, 1024×1536
-                # but for grid matching we want more aspect-ratio variety,
-                # so we generate at the closest allowed size
-                candidates = [
-                    (1024, 1024),
-                    (1536, 1024),
-                    (1024, 1536),
-                ]
-        elif provider == "doubao":
-            candidates = [
-                (2048, 2048),
-                (1920, 1080),
-                (1080, 1920),
-                (2048, 1152),
-                (1152, 2048),
-                (3840, 1280),
-                (3072, 1024),
-                (4096, 1024),
-                (5120, 1024),
-            ]
-        else:
-            candidates = [
-                (1024, 1024),
-                (1024, 768),
-                (768, 1024),
-                (1152, 864),
-                (864, 1152),
-            ]
-
-        # Score each candidate: prefer both aspect-ratio closeness AND
-        # sufficient total pixels (avoid picking tiny sizes for large grids)
-        return min(candidates, key=lambda size: abs((size[0] / size[1]) - aspect))
-
-    def _prepare_preview_frames(self, frames: list[Image.Image]) -> list[Image.Image]:
-        return [self._prepare_preview_frame(frame) for frame in frames]
-
-    def _prepare_preview_frame(self, frame: Image.Image) -> Image.Image:
-        rgba = frame.convert("RGBA")
-        padding = max(2, round(max(rgba.size) * 0.08))
-        canvas = Image.new("RGBA", (rgba.width + padding * 2, rgba.height + padding * 2), (0, 0, 0, 0))
-        canvas.paste(rgba, (padding, padding), rgba)
-        return canvas
-
-    def _png_bytes(self, image: Image.Image) -> bytes:
-        output = BytesIO()
-        image.save(output, format="PNG")
-        return output.getvalue()
+        return provider_size_for_grid(self.settings, max(cols, 1), max(rows, 1))
 
     def _reference_description(
         self,
