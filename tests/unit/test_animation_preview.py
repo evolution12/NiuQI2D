@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,6 +15,9 @@ if str(PYTHON_DIR) not in sys.path:
     sys.path.insert(0, str(PYTHON_DIR))
 
 from fastapi_app.routers.assets import _animation_frames_from_asset
+from fastapi_app.models import AssetSubtype
+from fastapi_app.postprocess.base import PostProcessContext
+from fastapi_app.postprocess.frame_extractor import FrameExtractorStep
 from fastapi_app.services.generation_service import GenerationService
 
 
@@ -56,3 +60,35 @@ class AnimationPreviewTest(unittest.TestCase):
 
         self.assertEqual(preview.size, (14, 12))
         self.assertEqual(preview.getpixel((7, 6)), (255, 0, 0, 255))
+
+    def test_frame_extractor_detects_actual_grid_when_model_ignores_requested_grid(self) -> None:
+        image = Image.new("RGBA", (400, 400), (245, 246, 242, 255))
+        colors = [
+            (220, 80, 70, 255),
+            (80, 170, 90, 255),
+            (80, 120, 220, 255),
+            (220, 170, 60, 255),
+        ]
+        boxes = [
+            (55, 55, 145, 145),
+            (255, 55, 345, 145),
+            (55, 255, 145, 345),
+            (255, 255, 345, 345),
+        ]
+        for box, color in zip(boxes, colors, strict=True):
+            for y in range(box[1], box[3]):
+                for x in range(box[0], box[2]):
+                    image.putpixel((x, y), color)
+
+        context = PostProcessContext(
+            image=image,
+            asset_subtype=AssetSubtype.ANIMATED_SPRITESHEET,
+            sheet_rows=4,
+            sheet_cols=4,
+        )
+
+        result = asyncio.run(FrameExtractorStep().run(context))
+
+        self.assertEqual(result.sheet_rows, 2)
+        self.assertEqual(result.sheet_cols, 2)
+        self.assertEqual(len(result.extracted_frames), 4)

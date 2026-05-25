@@ -350,6 +350,10 @@ class GenerationService:
         )
 
         frames = context.extracted_frames or [context.image]
+        sheet_rows = context.sheet_rows or sheet_rows
+        sheet_cols = context.sheet_cols or sheet_cols
+        direction_count = max(1, sheet_rows // max(len(actions), 1))
+        frame_count = max(1, sheet_cols)
         # Use the same processed frames for preview to ensure consistency
         preview_frames = self._prepare_preview_frames(frames)
         preview_paths: list[str] = []
