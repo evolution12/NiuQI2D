@@ -157,10 +157,20 @@ export function GeneratePage() {
 
           <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
             <button className="nq-btn nq-btn--accent nq-btn--lg" style={{ flex: 1 }} disabled={generating || !prompt.trim()} onClick={() => handleGenerate(true)}>
-              {generating ? '生成中...' : '快速预览'}
+              {generating ? (
+                <>
+                  <span className="spinner" />
+                  <span>生成中...</span>
+                </>
+              ) : '快速预览'}
             </button>
             <button className="nq-btn nq-btn--lg" style={{ flex: 1 }} disabled={generating || !prompt.trim()} onClick={() => handleGenerate(false)}>
-              {generating ? '生成中...' : '高质量'}
+              {generating ? (
+                <>
+                  <span className="spinner" />
+                  <span>生成中...</span>
+                </>
+              ) : '高质量'}
             </button>
           </div>
 
@@ -195,7 +205,12 @@ export function GeneratePage() {
           <div style={{ marginTop: 'var(--sp-3)', display: 'flex', gap: 'var(--sp-2)' }}>
             <button className="nq-btn nq-btn--accent nq-btn--lg" disabled={!selectedId || generating}
               onClick={handleSelectBase}>
-              {generating ? '生成中...' : '以此为基础生成方向动画'}
+              {generating ? (
+                <>
+                  <span className="spinner" />
+                  <span>生成中...</span>
+                </>
+              ) : '以此为基础生成方向动画'}
             </button>
             <button className="nq-btn nq-btn--lg" onClick={() => { setPipelineStep('idle'); setPipelineId(null); }}>
               重新生成基座图
