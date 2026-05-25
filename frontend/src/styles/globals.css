@@ -217,6 +217,19 @@ textarea.nq-input { height: auto; line-height: 1.55; resize: vertical; padding: 
 /* ---- Utilities ---- */
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Spinner (loading indicator) */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.spinner--sm { width: 14px; height: 14px; border-width: 1.5px; }
+.spinner--lg { width: 20px; height: 20px; border-width: 2.5px; }
+
 /* ============================================================
    Sidebar
    ============================================================ */
