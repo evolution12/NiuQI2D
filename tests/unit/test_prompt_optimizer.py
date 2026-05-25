@@ -18,7 +18,7 @@ class _FakeResponse:
     text = ""
 
     def json(self) -> dict[str, object]:
-        return {"choices": [{"message": {"content": "中文优化提示词"}}]}
+        return {"choices": [{"message": {"content": "optimized English prompt"}}]}
 
 
 class _FakeAsyncClient:
@@ -39,17 +39,17 @@ class _FakeAsyncClient:
 
 
 class PromptOptimizerTest(unittest.IsolatedAsyncioTestCase):
-    async def test_optimizer_system_prompt_requires_chinese_output(self) -> None:
+    async def test_optimizer_system_prompt_requires_english_output(self) -> None:
         optimizer = PromptOptimizer(api_provider="openai", api_key="test-key", api_model="test-model")
 
         with patch("fastapi_app.services.prompt_optimizer.httpx.AsyncClient", _FakeAsyncClient):
             result = await optimizer._optimize_with_provider("template prompt")
 
-        self.assertEqual(result, "中文优化提示词")
-        self.assertIn("仅输出中文", SYSTEM_PROMPT)
-        self.assertIn("最小扩展策略", SYSTEM_PROMPT)
-        self.assertIn("不要主动添加", SYSTEM_PROMPT)
-        self.assertNotIn("Output English only", SYSTEM_PROMPT)
+        self.assertEqual(result, "optimized English prompt")
+        self.assertIn("Output English only", SYSTEM_PROMPT)
+        self.assertIn("minimal expansion strategy", SYSTEM_PROMPT)
+        self.assertIn("Do not proactively add", SYSTEM_PROMPT)
+        self.assertNotIn("仅输出中文", SYSTEM_PROMPT)
 
         payload = _FakeAsyncClient.payload
         self.assertIsNotNone(payload)
