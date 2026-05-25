@@ -30,7 +30,7 @@ class _FakeStorage:
 
 
 class AnimationPreviewTest(unittest.TestCase):
-    def test_animation_endpoint_prefers_full_frames_over_cropped_previews(self) -> None:
+    def test_animation_endpoint_ignores_legacy_cropped_previews(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             frame_dir = root / "project" / "processed" / "record"
@@ -50,6 +50,28 @@ class AnimationPreviewTest(unittest.TestCase):
             frames, _, _ = _animation_frames_from_asset(_FakeStorage(root), asset)
 
         self.assertEqual(frames, ["/images/project/processed/record/frame_000.png"])
+
+    def test_animation_endpoint_uses_full_source_grid_previews_when_marked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            frame_dir = root / "project" / "processed" / "record"
+            frame_dir.mkdir(parents=True)
+            (frame_dir / "animation.json").write_text(
+                json.dumps(
+                    {
+                        "frames": ["project/processed/record/frame_000.png"],
+                        "preview_frames": ["project/processed/record/preview_000.png"],
+                        "preview_frame_kind": "source_grid_full_frame",
+                        "frame_delay_ms": 120,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            asset = SimpleNamespace(source_path="project/processed/record/frame_000.png")
+
+            frames, _, _ = _animation_frames_from_asset(_FakeStorage(root), asset)
+
+        self.assertEqual(frames, ["/images/project/processed/record/preview_000.png"])
 
     def test_preview_frame_preserves_entire_frame_canvas(self) -> None:
         service = GenerationService.__new__(GenerationService)
@@ -92,3 +114,26 @@ class AnimationPreviewTest(unittest.TestCase):
         self.assertEqual(result.sheet_rows, 2)
         self.assertEqual(result.sheet_cols, 2)
         self.assertEqual(len(result.extracted_frames), 4)
+        self.assertEqual([frame.size for frame in result.extracted_frames], [(200, 200)] * 4)
+
+    def test_frame_extractor_does_not_collapse_multiframe_sheet_to_one_preview(self) -> None:
+        image = Image.new("RGBA", (400, 400), (180, 220, 230, 255))
+        for y in range(0, 400, 20):
+            for x in range(400):
+                image.putpixel((x, y), (120, 170, 190, 255))
+        for x in range(0, 400, 20):
+            for y in range(400):
+                image.putpixel((x, y), (120, 170, 190, 255))
+
+        context = PostProcessContext(
+            image=image,
+            asset_subtype=AssetSubtype.ANIMATED_SPRITESHEET,
+            sheet_rows=4,
+            sheet_cols=4,
+        )
+
+        result = asyncio.run(FrameExtractorStep().run(context))
+
+        self.assertEqual(result.sheet_rows, 4)
+        self.assertEqual(result.sheet_cols, 4)
+        self.assertEqual(len(result.extracted_frames), 16)

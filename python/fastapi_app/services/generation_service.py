@@ -23,7 +23,7 @@ from ..schemas import (
     SelectRecordResponse,
     VariantRequest,
 )
-from ..postprocess import PostProcessContext
+from ..postprocess import FrameExtractorStep, PostProcessContext
 from ..services.image_generator import ImageGenerator
 from ..services.postprocess import PostProcessPipeline
 from ..services.prompt_optimizer import PromptOptimizer
@@ -354,8 +354,20 @@ class GenerationService:
         sheet_cols = context.sheet_cols or sheet_cols
         direction_count = max(1, sheet_rows // max(len(actions), 1))
         frame_count = max(1, sheet_cols)
-        # Use the same processed frames for preview to ensure consistency
-        preview_frames = self._prepare_preview_frames(frames)
+        preview_context = await FrameExtractorStep().run(
+            PostProcessContext(
+                image=source_image,
+                asset_type=record.asset_type,
+                asset_subtype=record.asset_subtype,
+                target_size=target_size,
+                sheet_rows=sheet_rows,
+                sheet_cols=sheet_cols,
+            )
+        )
+        preview_source_frames = preview_context.extracted_frames or frames
+        if len(preview_source_frames) != len(frames):
+            preview_source_frames = frames
+        preview_frames = self._prepare_preview_frames(preview_source_frames)
         preview_paths: list[str] = []
         frame_paths: list[str] = []
         for index, frame in enumerate(preview_frames):
@@ -380,6 +392,7 @@ class GenerationService:
         manifest = {
             "frames": frame_paths,
             "preview_frames": preview_paths,
+            "preview_frame_kind": "source_grid_full_frame",
             "frame_delay_ms": 120,
             "actions": self._animation_actions(actions, direction_count, frame_count, len(frame_paths)),
             "sheet_rows": sheet_rows,

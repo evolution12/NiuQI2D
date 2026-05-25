@@ -9,7 +9,6 @@ from .base import PostProcessContext, PostProcessStep, ensure_rgba
 MIN_GROUP_RATIO = 0.08
 ACTIVE_COLUMN_RATIO = 0.015
 MERGE_GAP_RATIO = 0.02
-FRAME_PADDING_RATIO = 0.08
 TARGET_SCAN_SIZE = 768
 
 
@@ -72,27 +71,43 @@ class FrameExtractorStep(PostProcessStep):
         expected_count = rows * cols
         if detected_count <= 0 or detected_count == expected_count:
             return []
+        if expected_count > 1 and detected_count == 1:
+            return []
+
+        row_ranges = self._cell_ranges_from_groups(row_groups, image.height)
+        col_ranges = self._cell_ranges_from_groups(col_groups, image.width)
 
         frames: list[Image.Image] = []
-        pad_x = max(1, round(image.width * FRAME_PADDING_RATIO / max(len(col_groups), 1)))
-        pad_y = max(1, round(image.height * FRAME_PADDING_RATIO / max(len(row_groups), 1)))
-        for top, bottom in row_groups:
-            for left, right in col_groups:
-                box = (
-                    max(0, left - pad_x),
-                    max(0, top - pad_y),
-                    min(image.width, right + pad_x),
-                    min(image.height, bottom + pad_y),
-                )
+        for top, bottom in row_ranges:
+            for left, right in col_ranges:
+                box = (left, top, right, bottom)
                 frames.append(image.crop(box).convert("RGBA"))
         return frames
+
+    def _cell_ranges_from_groups(self, groups: list[tuple[int, int]], size: int) -> list[tuple[int, int]]:
+        if not groups:
+            return []
+
+        boundaries = [0]
+        for previous, current in zip(groups, groups[1:], strict=False):
+            boundaries.append(round((previous[1] + current[0]) / 2))
+        boundaries.append(size)
+
+        ranges: list[tuple[int, int]] = []
+        for start, end in zip(boundaries, boundaries[1:], strict=False):
+            if end > start:
+                ranges.append((start, end))
+        return ranges
 
     def _detected_grid_size(self, image: Image.Image, rows: int, cols: int) -> tuple[int | None, int | None]:
         row_groups, col_groups = self._detect_content_grid(image)
         if not row_groups or not col_groups:
             return None, None
         detected_count = len(row_groups) * len(col_groups)
-        if detected_count <= 0 or detected_count == rows * cols:
+        expected_count = rows * cols
+        if detected_count <= 0 or detected_count == expected_count:
+            return None, None
+        if expected_count > 1 and detected_count == 1:
             return None, None
         return len(row_groups), len(col_groups)
 

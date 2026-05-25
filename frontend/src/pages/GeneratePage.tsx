@@ -11,7 +11,7 @@ import { ParamPanel } from '../components/generate/ParamPanel';
 import { ReferenceUpload } from '../components/generate/ReferenceUpload';
 import { CandidateGrid } from '../components/generate/CandidateGrid';
 import { ImageModal } from '../components/generate/ImageModal';
-import type { AssetType, AssetSubtype, GenerateParams, GenerationRecord } from '../types';
+import type { AssetType, AssetSubtype, GenerateParams } from '../types';
 
 export function GeneratePage() {
   const navigate = useNavigate();

@@ -22,8 +22,11 @@ export function AnimationPlayer({
   const [selectedAction, setSelectedAction] = useState<string | null>(actionNames[0] ?? null);
   const intervalRef = useRef<number | null>(null);
 
-  const activeFrames = selectedAction && actions?.[selectedAction]
-    ? actions[selectedAction].map((i) => frames[i]).filter(Boolean)
+  const activeIndexes = selectedAction
+    ? actions?.[`${selectedAction}_all`] ?? actions?.[selectedAction]
+    : undefined;
+  const activeFrames = activeIndexes
+    ? activeIndexes.map((i) => frames[i]).filter(Boolean)
     : frames;
 
   useEffect(() => {
